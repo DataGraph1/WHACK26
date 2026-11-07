@@ -5,11 +5,37 @@ from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
+from pathlib import Path
 import re
 from threading import Lock
 import time
 import urllib.error
 import urllib.request
+
+
+def load_local_config():
+    """Load this service's ignored .env file; explicit environment wins."""
+    config_path = Path(__file__).with_name(".env")
+    if not config_path.is_file():
+        return
+    allowed = {
+        "ELEVENLABS_API_KEY", "ELEVENLABS_VOICE_ID", "ELEVENLABS_MODEL_ID",
+        "OLLAMA_URL", "OLLAMA_MODEL", "NARRATOR_HOST", "NARRATOR_PORT",
+        "NARRATOR_ALLOW_ORIGIN",
+    }
+    for line in config_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        key, separator, value = line.partition("=")
+        key, value = key.strip(), value.strip()
+        if separator and key in allowed:
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+                value = value[1:-1]
+            os.environ.setdefault(key, value)
+
+
+load_local_config()
 
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")

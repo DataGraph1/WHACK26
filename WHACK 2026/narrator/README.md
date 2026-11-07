@@ -58,7 +58,7 @@ The LLM sees the current event, recent events, previous lines, and wrong-answer 
 Text: [Ollama's chat API](https://docs.ollama.com/api/chat) with `qwen2.5:1.5b` by default. This model is approximately 1 GB and [Apache 2.0 licensed](https://registry.ollama.com/library/qwen2.5). Speech: [ElevenLabs' text-to-speech API](https://elevenlabs.io/docs/api-reference/text-to-speech/convert) with voice ID `UgBBYS2sOqTuMpoF3BR0` for **Mark – Natural Conversations**. The default speech model is `eleven_v4_turbo`, which [supports audio tags for expressive, real-time delivery](https://elevenlabs.io/docs/help-center/product/core-capabilities/text-to-speech/how-do-audio-tags-work-with-eleven-v3-and-v4). ElevenLabs is a hosted service and requires your own API key and available credits.
 
 1. Install [Ollama](https://ollama.com/download), then run `ollama pull qwen2.5:1.5b`. Start Ollama if it is not running.
-2. Obtain an ElevenLabs API key and make **Mark – Natural Conversations** available in your ElevenLabs voice library. Set `ELEVENLABS_API_KEY` in the Python server's environment. Keep the key out of Godot and GitHub.
+2. Create an ElevenLabs API key at [Developers → API Keys](https://elevenlabs.io/app/developers/api-keys), and make **Mark – Natural Conversations** available in your ElevenLabs voice library. Copy `.env.example` to `.env` beside `agent_api.py` and set `ELEVENLABS_API_KEY` there. The server reads this ignored local file at startup; an existing environment variable takes precedence. Keep the key out of Godot and GitHub.
 3. Run this server with Python 3.10 or newer. It uses only the Python standard library:
 
 ```bash
@@ -67,6 +67,6 @@ python3.12 agent_api.py
 
 The API listens on `127.0.0.1:8765` by default. Change `NARRATOR_HOST` and `NARRATOR_PORT` if Godot runs on a different device. If Godot is exported as a browser game on a different origin, set `NARRATOR_ALLOW_ORIGIN` to that exact origin. If Godot and the API run on the same computer, the default URL works. Without Ollama or the ElevenLabs key, the API returns HTTP 503 instead of inventing output.
 
-Configuration: `OLLAMA_URL`, `OLLAMA_MODEL`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, and `ELEVENLABS_MODEL_ID` are environment variables. `GET /health` reports whether a key is configured, without exposing it. The server sends `[happy]`, `[worried]`, `[tense]`, or `[urgent]` as voice directions while keeping the displayed caption free of tags. Set `ELEVENLABS_MODEL_ID=eleven_v3` if your account does not have access to v4 Turbo.
+Configuration: `OLLAMA_URL`, `OLLAMA_MODEL`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, and `ELEVENLABS_MODEL_ID` can be set in the environment or local `.env`. `GET /health` reports whether a key is configured, without exposing it. The server sends `[happy]`, `[worried]`, `[tense]`, or `[urgent]` as voice directions while keeping the displayed caption free of tags. Set `ELEVENLABS_MODEL_ID=eleven_v3` if your account does not have access to v4 Turbo.
 
 For background on the bridge, see the official [Godot HTTPRequest](https://docs.godotengine.org/en/stable/classes/class_httprequest.html) and [AudioStreamMP3](https://docs.godotengine.org/en/stable/classes/class_audiostreammp3.html) documentation. The GDScript adapter targets Godot 4.4 or later.
