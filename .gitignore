@@ -1,0 +1,4 @@
+venv/
+gesture_recognizer.task
+.godot/
+__pycache__/
