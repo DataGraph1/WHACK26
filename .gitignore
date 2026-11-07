@@ -3,3 +3,5 @@ venv/
 gesture_recognizer.task
 .godot/
 __pycache__/
+
+.runtime/

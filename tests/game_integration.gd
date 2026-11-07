@@ -15,6 +15,15 @@ func run() -> void:
     var narrator = get_tree().root.get_node("NarratorClient")
     var bridge = get_tree().root.get_node("Bridge")
     narrator.event_observed.connect(func(event: Dictionary) -> void: events.append(event))
+    var demo := Bomb.new()
+    demo.module_count = 2
+    get_tree().root.add_child(demo)
+    check(demo.modules[0] is LinkModule and demo.modules[1] is WiresModule,
+        "Two-module demo must include predictable Link Recovery and Wires")
+    demo.queue_free()
+    await get_tree().process_frame
+    check(narrator.session_id.is_empty() and not bridge.enabled,
+        "Leaving a round must stop old narration and input")
     var bomb := Bomb.new()
     bomb.module_count = 5
     get_tree().root.add_child(bomb)
@@ -27,8 +36,14 @@ func run() -> void:
             wires = module
     var target: Control = wires.wire_hits[wires.correct]
     bridge.cursor = target.get_global_rect().get_center()
+    check(narrator._focus_is_current(str(target.get_meta("desc")), "WIRES"),
+        "Current focus target must remain valid while its narration is pending")
+    check(not narrator._focus_is_current("other target", "WIRES")
+        and not narrator._focus_is_current(str(target.get_meta("desc")), "MEMORY"),
+        "Moved focus must reject a stale narration")
     bridge.camera_connected = true
     bridge.cursor_visible = false
+    bridge.pointer_confidence = 0.99
     bridge.gesture_confidence = 0.99
     bridge._fire("ILoveYou")
     check(bridge.pending.is_empty(), "Missing pointer must not arm a cut")
@@ -37,11 +52,34 @@ func run() -> void:
     bridge._fire("ILoveYou")
     check(bridge.pending.is_empty(), "Uncertain gesture must not arm a cut")
     bridge.gesture_confidence = 0.99
+    bridge.pointer_confidence = 0.2
+    bridge._fire("ILoveYou")
+    check(bridge.pending.is_empty(), "Uncertain pointer must not arm a cut")
+    bridge.pointer_confidence = 0.99
     bridge._fire("ILoveYou")
     check(not bridge.pending.is_empty(), "Stable hands must arm a cut")
+    var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+    var center: Vector2 = target.get_global_rect().get_center()
+    var released_command := {"has_cursor": true, "x": center.x / viewport_size.x,
+        "y": center.y / viewport_size.y, "pointer_confidence": 0.99,
+        "gesture": "None", "confidence": 0.0, "hands": 2}
+    bridge._ingest_camera_packet(released_command)
+    check(not bridge.pending.is_empty(), "Releasing left gesture must preserve queued command")
+    bridge._ingest_camera_packet({"has_cursor": false, "pointer_confidence": 0.0,
+        "gesture": "Victory", "confidence": 0.99, "hands": 1})
+    check(bridge.pending.is_empty(), "Losing right pointer must cancel queued command")
+    bridge._ingest_camera_packet({"has_cursor": true, "x": center.x / viewport_size.x,
+        "y": center.y / viewport_size.y, "pointer_confidence": 0.99,
+        "gesture": "None", "confidence": 0.0, "hands": 2})
+    bridge.gesture_confidence = 0.99
+    bridge._fire("ILoveYou")
     bridge._fire("Victory")
     check(wires.solved, "Confirmed correct wire must solve module")
     check(events[-1].kind == "result" and events[-1].result == "correct", "Actual wire result must reach narrator")
+    check(events[-1].action.begins_with("cut wire") and events[-1].context.module_solved,
+        "Narrator must receive the actual command and solved state")
+    check(events[-1].context.target_reusable == false,
+        "Cut wire must be marked unavailable for further attempts")
     check(not events[-1].context.has("correct"), "Hidden solution must not enter context")
     var link: LinkModule
     for module in bomb.modules:

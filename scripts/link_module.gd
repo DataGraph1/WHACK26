@@ -23,7 +23,7 @@ func build() -> void:
 func _process(delta: float) -> void:
     if solved or bomb.over or not Bridge.enabled:
         return
-    var tracked := not Bridge.camera_connected or (Bridge.cursor_visible and Bridge.gesture_confidence >= 0.65)
+    var tracked := not Bridge.using_camera() or (Bridge.cursor_visible and Bridge.pointer_confidence >= 0.65 and Bridge.gesture_confidence >= 0.65)
     var holding := tracked and pad.get_global_rect().has_point(Bridge.cursor) and Bridge.gesture == "Open_Palm"
     if holding:
         charge += delta

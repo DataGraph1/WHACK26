@@ -1,36 +1,32 @@
-# Implementation handover
+# WHACK26 implementation handover
 
-Current request: implement all ten ranked improvements from the incident.io review.
+This file records progress for the user's request to implement the ten review priorities. Credit balance is not exposed, so commits are made as checkpoints. Current playable project: repository root `project.godot`; nested `bomb-game` and `GDMP-demo` are older prototypes.
 
-## Completed in first checkpoint
-- Root playable Godot project now registers NarratorClient, sends round start/state/end and inspection/result events, and displays captions and a decision reason.
-- Camera packets now carry recognition confidence. Root input cancels pending commands on pointer/confidence loss and connection transitions.
-- Game now consistently uses 180 seconds and three strikes, with no accelerated clock.
-- Narrator HTTP timeout, stale queued event rejection, round restart audio cancellation, and terminal-event queue priority added.
-- Godot import and headless startup passed; existing three narrator unit tests passed under Python 3.12.
+## Done
 
-## Still required (do not describe task as complete)
-- Meaningful integration tests covering actual Godot events, safety gates, terminal outcomes and restart.
-- Full live Ollama and ElevenLabs validation; narrator was not running during review. Do not print or commit .env secrets.
-- Update physical manual to exact current puzzle rules, remove copied prose, include Memory. Existing attached v2 differs; README refers to unavailable v6.
-- Implement original robot-specific mechanic, richer proactive observation, useful memory, audio priority/fallback and latency measurement.
-- Validate missing-pointer reacquisition and held gestures; current gate relies on confidence packets and hold time.
-- User-facing setup, calibration/onboarding, playtesting and two-minute demo guide.
-- Synchronize obsolete bomb-game integration documentation with root project; avoid maintaining two diverging clients.
-- No changes pushed yet. User requested implementation; earlier push request preceded this work.
+- Root playable game posts real round, focus, inspection, action result, uncertainty, state and end events to the narrator API. Captions, decision reasons and measured round-trip time appear in the game. ElevenLabs Liam audio plays from returned MP3.
+- MediaPipe camera bridge reports two hands, pointer and gesture confidence, and preview. The right pointer must be reliable for commands. Left gesture release keeps a queued command; low-confidence gestures are ignored; losing the pointer cancels pending actions. K toggles mouse/keyboard control.
+- Restarting or leaving a round cancels its outstanding narration and disables old input. The two-module demo always selects Link Recovery and Wires.
+- Countdown and lives consistently use 180 seconds and three strikes. Start screen lets the player inspect the camera before choosing a two- or four-module round.
+- Added original Link Recovery module using a continuous stable hand hold, interruption and recovery events. Four established modules remain available.
+- Revision 7 manual precisely documents current rules, controls and Memory; old copied manual prose was rewritten. Self-contained printable HTML is generated from Markdown.
+- Backend uses round memory, pacing and warning decisions, guarded critical-state phrasing, latency metrics and explicit caption fallbacks. Numeric clock/life claims come only from current game state. A wrong result cannot tell the player to abandon an unfinished module or blame tracking for a confirmed puzzle mistake. Client bounds request time, coalesces heartbeat state, gives terminal events priority and discards focus narration after the pointer moves.
+- `launch.py` checks and starts the local demo stack. README and demo guide document setup and pitch.
 
-## Environment
-Repo: /Users/kp/Documents/Codex/2026-11-07/i/work/WHACK26
-Godot: /Applications/Godot.app/Contents/MacOS/Godot
-Python: python3.12 (system python3 is too old).
-Credit balance is not exposed; checkpoints are periodic rather than tied to 5% remaining.
+## Evidence
 
-## Second checkpoint update
-- Added revision 7 manual with original prose, exact current rules, Memory instructions and inspiration credit.
-- Added Link Recovery original continuous hand-input module, always selected; other modules random.
-- Added welcome/camera check screen and two/four module start buttons.
-- Added dwell focus events, recorded inspection answers in round memory, caption fallback for model/TTS failure, processing latency field, closed-round late-event suppression.
-- Seven backend tests and Godot integration checks pass, including actual wire result, three-strike ending and Link Recovery interrupted/stable holds.
-- Live ElevenLabs Liam request succeeded in 1.58 seconds (short sample). Full LLM-to-Godot voice path still needs verification.
-- Installing Ollama via Homebrew; model download/warmup pending.
-- Still required: visual UI verification, better outgoing/incoming event timeline and latency display, launch/preflight helper, live end-to-end test, novice playtest (requires people), demo guide, review synchronization and final checks.
+- Godot 4.7.2 import and headless startup succeeded.
+- `tests/game_integration.tscn` passes for real wire result, confidence gating, left-hand gesture release, pointer loss, Link Recovery, three-strike failure and outgoing narrator events.
+- Fourteen Python narrator tests pass under Python 3.12. `launch.py --check` passes with local Godot, camera environment, Qwen 3B and configured Liam key.
+- Live Godot `tests/narrator_live.tscn` performed a real wrong wire cut, observed one strike, received a Qwen 3B generated caption, and decoded Liam MP3 in 3.6 seconds. The test disables playback so Godot can free MP3 resources cleanly at exit. Earlier visual checks showed camera preview, the two-module game and the event feed working.
+- Human novice playtesting, a complete physical hand-controlled round and speaker listening in the venue have not been completed; these need real participants and the demo environment. Model-written focus/result lines can still occasionally be awkward or need a labelled fallback. This remains a demo-quality local agent, not a reliability guarantee.
+
+## Before the live demonstration
+
+- Run the full checks after any edits and visually inspect the current scene once more.
+- Print the revision 7 manual; do not hand out the older v2 ODT.
+- Perform a complete physical-camera round and test speaker volume/latency in the venue.
+- Ask two new players to follow the manual, record confusion points, adjust timer or module count if needed.
+- Do not commit `narrator/.env`, local model weights, `.venv` or `.runtime` logs.
+
+The repository history records the implementation checkpoints. Keep this file updated as the team completes physical playtesting.

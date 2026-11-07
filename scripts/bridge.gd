@@ -6,14 +6,22 @@ extends Node
 
 signal observed(event: Dictionary)
 
+var keyboard_mode := false
+
+func using_camera() -> bool:
+    return camera_connected and not keyboard_mode
+
 var gesture_confidence := 0.0
+var pointer_confidence := 0.0
 var _focus_target: Control
 var _focus_since := 0.0
 var _focus_sent := false
 var _last_focus_event := -20.0
 
 func tracking_context() -> Dictionary:
-    return {"right_hand_visible": cursor_visible if camera_connected else true, "gesture_confidence": gesture_confidence, "camera_connected": camera_connected}
+    return {"right_hand_visible": cursor_visible if using_camera() else true,
+        "gesture_confidence": gesture_confidence, "pointer_confidence": pointer_confidence,
+        "camera_connected": camera_connected, "control_mode": "camera" if using_camera() else "keyboard"}
 
 signal bot_said(text: String)
 signal camera_frame_changed(texture: Texture2D)
@@ -91,6 +99,12 @@ func _now() -> float:
 
 func _input(event: InputEvent) -> void:
     var k := event as InputEventKey
+    if k != null and k.pressed and not k.echo and k.keycode == KEY_K:
+        keyboard_mode = not keyboard_mode
+        pending = {}
+        _set_gesture("None")
+        bot_said.emit("Mouse and keyboard mode" if keyboard_mode else "Camera control mode")
+        return
     if k == null or k.echo or not KEY_GESTURES.has(k.keycode):
         return
     var g: String = KEY_GESTURES[k.keycode]
@@ -104,24 +118,7 @@ func _process(_delta: float) -> void:
     while _udp.get_available_packet_count() > 0:
         var data = JSON.parse_string(_udp.get_packet().get_string_from_utf8())
         if data is Dictionary:
-            _last_packet = _now()
-            camera_index = int(data.get("camera_index", -1))
-            hand_count = int(data.get("hands", 0))
-            cursor_visible = bool(data.get("has_cursor", false))
-            if data.get("has_cursor", false):
-                var size := get_viewport().get_visible_rect().size
-                cursor = Vector2(float(data.get("x", 0.5)), float(data.get("y", 0.5))) * size
-            gesture_confidence = float(data.get("confidence", 0.0))
-            if not cursor_visible or gesture_confidence < 0.65:
-                if not pending.is_empty():
-                    pending = {}
-                    bot_said.emit("Tracking uncertain. Command cancelled.")
-                    NarratorClient.report_uncertainty("pointer_missing_or_low_confidence")
-                _set_gesture("None")
-            else:
-                _set_gesture(str(data.get("gesture", "None")))
-            if data.has("frame_jpeg"):
-                _update_camera_preview(str(data["frame_jpeg"]))
+            _ingest_camera_packet(data)
     var was_connected := camera_connected
     camera_connected = _now() - _last_packet <= UDP_TIMEOUT
     if camera_connected != was_connected:
@@ -135,8 +132,12 @@ func _process(_delta: float) -> void:
         cursor = get_viewport().get_mouse_position()
         _set_gesture(_kb_gesture)
 
+    if keyboard_mode:
+        cursor = get_viewport().get_mouse_position()
+        _set_gesture(_kb_gesture)
+
     if enabled:
-        var focused := target_at() if (not camera_connected or cursor_visible) else null
+        var focused := target_at() if (not using_camera() or cursor_visible) else null
         if focused != _focus_target:
             _focus_target = focused
             _focus_since = _now()
@@ -154,6 +155,29 @@ func _process(_delta: float) -> void:
     if not pending.is_empty() and _now() - pending.time > CONFIRM_WINDOW:
         pending = {}
         bot_said.emit("Cancelled.")
+
+
+func _ingest_camera_packet(data: Dictionary) -> void:
+    _last_packet = _now()
+    camera_index = int(data.get("camera_index", -1))
+    hand_count = int(data.get("hands", 0))
+    cursor_visible = bool(data.get("has_cursor", false))
+    if cursor_visible:
+        var size := get_viewport().get_visible_rect().size
+        cursor = Vector2(float(data.get("x", 0.5)), float(data.get("y", 0.5))) * size
+    gesture_confidence = float(data.get("confidence", 0.0))
+    pointer_confidence = float(data.get("pointer_confidence", 0.0))
+    if not keyboard_mode and (not cursor_visible or pointer_confidence < 0.65):
+        if not pending.is_empty():
+            pending = {}
+            bot_said.emit("Right pointer lost. Command cancelled.")
+            NarratorClient.report_uncertainty("right_pointer_missing_or_low_confidence")
+        _set_gesture("None")
+    else:
+        var candidate := str(data.get("gesture", "None"))
+        _set_gesture(candidate if keyboard_mode or candidate == "None" or gesture_confidence >= 0.65 else "None")
+    if data.has("frame_jpeg"):
+        _update_camera_preview(str(data["frame_jpeg"]))
 
 
 func _update_camera_preview(encoded_jpeg: String) -> void:
@@ -176,7 +200,7 @@ func _set_gesture(g: String) -> void:
 
 
 func _fire(g: String) -> void:
-    if camera_connected and (not cursor_visible or gesture_confidence < 0.65):
+    if using_camera() and (not cursor_visible or pointer_confidence < 0.65 or gesture_confidence < 0.65):
         return
     if g == "Open_Palm":
         for pad in get_tree().get_nodes_in_group("continuous_input"):
@@ -259,7 +283,12 @@ func _confirm() -> void:
     var context := {"target": str(p.target.get_meta("desc")), "observation": reply, "seconds_left": bomb.time_left, "lives": maxi(0, 3 - bomb.strikes)}
     if not bomb.over:
         if p.kind == "press" and module is BombModule and not was_solved and (bomb.strikes > before_strikes or reply.begins_with("Correct") or module.solved):
-            NarratorClient.send_result(game_name, bomb.strikes == before_strikes, str(p.target.get_meta("desc")), context)
+            context["module_solved"] = module.solved
+            context["command_count"] = p.count
+            if module is WiresModule:
+                context["target_reusable"] = false
+            var action: String = str(p.target.get_meta("verb", "Press")).to_lower() + " " + str(p.target.get_meta("desc"))
+            NarratorClient.send_result(game_name, bomb.strikes == before_strikes, action, context)
         elif p.kind != "press":
             context["query"] = str(p.value) if p.kind == "color" else "read"
             NarratorClient.post_event({"game": game_name, "kind": "inspection_result", "context": context})

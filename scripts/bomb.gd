@@ -33,7 +33,20 @@ func _ready() -> void:
     _build_ui()
     _build_modules()
     NarratorClient.register_tracking_source(Bridge)
-    NarratorClient.begin_round(str(Time.get_ticks_usec()), "bomb", {"lives": 3, "seconds_left": time_left})
+    var module_names: Array[String] = []
+    for module in modules:
+        module_names.append(module.title())
+    NarratorClient.begin_round(str(Time.get_ticks_usec()), "bomb", {
+        "lives": 3, "seconds_left": time_left, "modules": module_names,
+        "mission": "Disarm every module using the field guide and both hands",
+    })
+
+
+func _exit_tree() -> void:
+    if not over:
+        NarratorClient.cancel_round()
+    Bridge.enabled = false
+    Bridge.pending = {}
 
 
 func has_indicator(label: String) -> bool:
@@ -100,6 +113,8 @@ func _build_modules() -> void:
     var kinds := [WiresModule, ButtonModule, SimonModule, MemoryModule]
     kinds.shuffle()
     kinds.push_front(LinkModule)
+    if module_count == 2:
+        kinds = [LinkModule, WiresModule]
     for i in mini(module_count, kinds.size()):
         var m: BombModule = kinds[i].new()
         m.position = Vector2(40 + (i % 2) * 400, 150 + floori(i / 2.0) * 270)

@@ -20,7 +20,7 @@ Right index finger: move the cursor. Keep this hand visible while issuing a comm
 | Victory / two fingers | 6 | Confirm the pending command |
 | I-love-you sign | 7 | Queue a cut or button press |
 
-Keep pointing at the same target, then confirm within three seconds. For multiple presses, repeat the press gesture the required number of times before confirming once. Each press refreshes the confirmation window. Moving to another target cancels confirmation. Uncertain tracking cancels pending commands. With no camera connection, mouse and keyboard provide the same controls.
+Keep pointing at the same target, then confirm within three seconds. For multiple presses, repeat the press gesture the required number of times before confirming once. Each press refreshes the confirmation window. Moving to another target cancels confirmation. Losing the right pointer cancels pending commands; an uncertain left-hand gesture is ignored while you release your hand between commands. Press K to toggle mouse and keyboard controls even while the camera is connected. With no camera connection, mouse and keyboard provide the same controls automatically.
 
 The robot's response to a colour query is Yes or No. Read the serial number and indicator labels with an open palm. Count the visible battery blocks. A vowel means A, E, I, O or U. Wire and button positions in this guide start at 1.
 
@@ -28,7 +28,7 @@ The robot's response to a colour query is Yes or No. Read the serial number and 
 
 Every round includes this robot-specific module. Point inside the HOLD pad and continuously show an open left palm for 1.5 seconds. With keyboard controls, keep the mouse on the pad and hold 2. No confirmation gesture is needed here. The pad moves after each completed contact; restore three contacts to disarm the module. Leaving the pad or losing reliable tracking resets only the current contact's charge, without a strike. The agent observes stabilization and interrupted contact events.
 
-The start screen offers two or four modules. Link Recovery is always included; the remaining modules are randomly selected from the four types below.
+The start screen offers two or four modules. The two-module demo always has Link Recovery and Wires. The four-module round includes Link Recovery and three randomly selected modules from the four types below.
 
 ## Wires
 

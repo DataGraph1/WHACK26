@@ -1,4 +1,6 @@
-# bomb-game integration
+# Archived bomb-game camera prototype
+
+The playable game and active narrator integration now live in the repository root. See [the root README](../README.md), [field guide](../docs/PLAYER_MANUAL.md) and [demo guide](../docs/DEMO.md). This folder is retained as camera integration reference; opening it will not launch the current game.
 
 This Godot 4.7 project uses the bundled GDMP plugin to show a camera preview and track both hands. Its committed main scene is `scene/camera.tscn`, with the bridge in `scripts/camera.gd`. The latest teammate commit referenced a different main scene and `ModuleSelection` Autoload, but did not include either file; those broken references were removed so this checkout opens.
 

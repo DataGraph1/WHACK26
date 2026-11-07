@@ -2,7 +2,10 @@
 
 import unittest
 
-from agent_api import NarratorAgent, NarratorUnavailable, validate_event
+try:
+    from .agent_api import NarratorAgent, NarratorUnavailable, validate_event
+except ImportError:
+    from agent_api import NarratorAgent, NarratorUnavailable, validate_event
 
 
 class FakeClock:
@@ -58,6 +61,8 @@ class NarratorStateTest(unittest.TestCase):
         warning = self.send("state", {"seconds_left": 29, "right_hand_visible": True})
         self.assertEqual(warning["trigger"], "time_warning")
         self.assertEqual(warning["mood"], "urgent")
+        self.assertIn("30 seconds", warning["text"])
+        self.assertTrue(warning["policy_guarded"])
         self.clock.now = 134
         self.assertFalse(self.send("state", {"seconds_left": 27})["say"])
         self.clock.now = 140
@@ -69,12 +74,15 @@ class NarratorStateTest(unittest.TestCase):
         uncertain = self.send("uncertainty", {"uncertainty_reason": "right_hand_missing"})
         self.assertEqual(uncertain["trigger"], "uncertainty")
         self.assertTrue(uncertain["say"])
+        self.assertIn("both hands", uncertain["text"])
+        self.assertTrue(uncertain["policy_guarded"])
         self.clock.now = 111
         self.assertFalse(self.send("uncertainty", {"uncertainty_reason": "right_hand_missing"})["say"])
         self.clock.now = 120
         result = self.send("result", {"lives": 1}, result="wrong", action="cut wire 2")
         self.assertEqual(result["mood"], "urgent")
         self.assertTrue(result["text"].startswith("Wrong choice."))
+        self.assertIn("One life remains", result["text"])
         self.clock.now = 124
         self.assertFalse(self.send("state", {"lives": 1})["say"])
 
@@ -106,9 +114,10 @@ class NarratorStateTest(unittest.TestCase):
         def unavailable(*args):
             raise NarratorUnavailable("test outage")
         self.agent._ask_llm = unavailable
-        result = self.send("uncertainty", {"uncertainty_reason": "missing_pointer"})
+        result = self.send("focus", {"target": "wire 2"})
         self.assertTrue(result["fallback"])
-        self.assertIn("Tracking", result["text"])
+        self.assertIn("wire 2 is under your pointer", result["text"])
+        self.assertEqual(result["observed_target"], "wire 2")
 
     def test_closed_round_rejects_late_events(self):
         self.send("game_ended", {"defused": False})
@@ -120,6 +129,68 @@ class NarratorStateTest(unittest.TestCase):
     def test_observed_values_are_preserved_in_memory(self):
         self.send("inspection_result", {"target": "wire 2", "query": "blue", "observation": "No"})
         self.assertEqual(self.agent.sessions["round-1"].inspected_targets[-1]["observation"], "No")
+
+    def test_model_question_is_replaced_with_safe_line(self):
+        self.agent._ask_llm = lambda *args: {
+            "say": True, "text": "What is this round about?", "mood": "cheerful",
+            "reason": "Need more information",
+        }
+        result = self.send("result", {"lives": 2}, result="correct")
+        self.assertTrue(result["fallback"])
+        self.assertNotIn("?", result["text"])
+        self.assertTrue(result["text"].endswith("."))
+
+    def test_current_timer_overrides_stale_memory(self):
+        self.send("result", {"seconds_left": 110, "lives": 2}, result="wrong")
+        result = self.send("state", {"seconds_left": 29, "lives": 2})
+        self.assertIn("30 seconds", result["text"])
+        self.assertNotIn("110", result["text"])
+
+    def test_result_rejects_invented_deadline_and_life(self):
+        self.agent._ask_llm = lambda *args: {
+            "say": True, "text": "Time's up! One life left. Inspect wire 2 again.",
+            "mood": "tense", "reason": "Guessed status",
+        }
+        result = self.send("result", {"seconds_left": 110, "lives": 2}, result="wrong")
+        self.assertTrue(result["fallback"])
+        self.assertNotIn("Time's up", result["text"])
+        self.assertNotIn("One life", result["text"])
+
+    def test_wrong_result_does_not_send_player_away_from_active_module(self):
+        self.agent._ask_llm = lambda *args: {
+            "say": True, "text": "Oops, try another module.",
+            "mood": "concerned", "reason": "Suggested switching",
+        }
+        result = self.send("result", {"module_solved": False}, result="wrong")
+        self.assertTrue(result["fallback"])
+        self.assertIn("unfinished module", result["fallback_reason"])
+        self.assertNotIn("another module", result["text"])
+
+    def test_confirmed_mistake_is_not_blame_on_camera(self):
+        self.agent._ask_llm = lambda *args: {
+            "say": True, "text": "Check your grip and gesture next time.",
+            "mood": "concerned", "reason": "Guessed tracking failure",
+        }
+        result = self.send("result", {"module_solved": False}, result="wrong")
+        self.assertTrue(result["fallback"])
+        self.assertIn("confirmed puzzle mistake", result["fallback_reason"])
+
+    def test_cut_wire_cannot_be_reused(self):
+        self.agent._ask_llm = lambda *args: {
+            "say": True, "text": "Double check it before cutting again.",
+            "mood": "concerned", "reason": "Suggested reusing target",
+        }
+        result = self.send("result", {"module_solved": False, "target_reusable": False},
+                           result="wrong")
+        self.assertTrue(result["fallback"])
+        self.assertIn("unavailable target", result["fallback_reason"])
+
+    def test_model_observation_omits_counters(self):
+        event = validate_event({"session_id": "r", "game": "wires", "kind": "result",
+            "result": "wrong", "context": {"target": "wire 2", "seconds_left": 110,
+            "lives": 2, "strikes": 1}})
+        observation = self.agent._model_observation(event)["context"]
+        self.assertEqual(observation, {"target": "wire 2"})
 
 
 if __name__ == "__main__":

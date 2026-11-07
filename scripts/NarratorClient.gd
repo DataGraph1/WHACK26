@@ -16,6 +16,7 @@ var _http: HTTPRequest
 var _player: AudioStreamPlayer
 var _queue: Array[Dictionary] = []
 var _busy := false
+var _inflight_started_ms := 0
 var _sequence := 0
 var _inflight_session_id := ""
 var _round_active := false
@@ -31,7 +32,7 @@ var _tracking_source: Node
 
 func _ready() -> void:
 	_http = HTTPRequest.new()
-	_http.timeout = 8.0
+	_http.timeout = 12.0
 	add_child(_http)
 	_http.request_completed.connect(_on_request_completed)
 	_player = AudioStreamPlayer.new()
@@ -74,6 +75,7 @@ func begin_round(round_id: String, game_name: String, context: Dictionary = {}) 
 		_busy = false
 	_queue.clear()
 	_player.stop()
+	_player.stream = null
 	session_id = round_id
 	_round_active = true
 	_round_game = game_name
@@ -120,6 +122,18 @@ func end_round(game_name: String, context: Dictionary = {}) -> void:
 	_round_active = false
 
 
+func cancel_round() -> void:
+	## A restart abandons this round without narrating a stale outcome.
+	_round_active = false
+	session_id = ""
+	_queue.clear()
+	if _busy:
+		_http.cancel_request()
+		_busy = false
+	_player.stop()
+	_player.stream = null
+
+
 func post_event(event: Dictionary) -> void:
 	if session_id.is_empty():
 		narrator_error.emit("Call begin_round before posting narrator events")
@@ -156,6 +170,7 @@ func post_event(event: Dictionary) -> void:
 			_http.cancel_request()
 			_busy = false
 		_player.stop()
+		_player.stream = null
 	payload["queued_at_ms"] = Time.get_ticks_msec()
 	_queue.append(payload)
 	_send_next()
@@ -165,11 +180,12 @@ func _send_next() -> void:
 	if _busy or _queue.is_empty():
 		return
 	var payload: Dictionary = _queue.pop_front()
-	if Time.get_ticks_msec() - int(payload.get("queued_at_ms", 0)) > 8000:
+	if Time.get_ticks_msec() - int(payload.get("queued_at_ms", 0)) > 12000:
 		_send_next()
 		return
 	payload.erase("queued_at_ms")
 	_busy = true
+	_inflight_started_ms = Time.get_ticks_msec()
 	_inflight_session_id = str(payload.get("session_id", ""))
 	var headers := PackedStringArray(["Content-Type: application/json"])
 	var error := _http.request(api_url, headers, HTTPClient.METHOD_POST, JSON.stringify(payload))
@@ -200,6 +216,13 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 		narrator_error.emit("Narrator HTTP " + str(response_code) + ": " + str(parsed.get("error", "unknown error")))
 		_send_next()
 		return
+	parsed["round_trip_ms"] = Time.get_ticks_msec() - _inflight_started_ms
+	if parsed.get("trigger") == "focus" and not _focus_is_current(
+			str(parsed.get("observed_target", "")), str(parsed.get("game", ""))):
+		parsed["reason"] = "Player moved off the observed target before narration returned"
+		narration_skipped.emit(parsed)
+		_send_next()
+		return
 	if parsed.get("say", false):
 		var audio: AudioStreamMP3 = null
 		var encoded := str(parsed.get("audio_base64", ""))
@@ -212,3 +235,16 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 	else:
 		narration_skipped.emit(parsed)
 	_send_next()
+
+
+func _focus_is_current(target_name: String, game_name: String) -> bool:
+	if target_name.is_empty() or not is_instance_valid(_tracking_source):
+		return false
+	if not _tracking_source.has_method("target_at"):
+		return false
+	var current = _tracking_source.target_at()
+	if not is_instance_valid(current) or str(current.get_meta("desc", "")) != target_name:
+		return false
+	var module = current.get_meta("module", null)
+	var current_game: String = module.title() if module is BombModule else "bomb"
+	return current_game == game_name
