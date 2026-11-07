@@ -256,10 +256,10 @@ func _on_camera_format_changed() -> void:
 			yuy2.camera_feed_id = _camera_feed.get_id()
 			yuy2.which_feed = CameraServer.FEED_YCBCR_IMAGE
 			frame_size = yuy2.get_size()
-			var material := ShaderMaterial.new()
-			material.shader = preload("res://shaders/yuy2_to_rgb.gdshader")
-			material.set_shader_parameter("texture_yuy2", yuy2)
-			camera_texture.material = material
+			var conversion_material := ShaderMaterial.new()
+			conversion_material.shader = preload("res://shaders/yuy2_to_rgb.gdshader")
+			conversion_material.set_shader_parameter("texture_yuy2", yuy2)
+			camera_texture.material = conversion_material
 			if frame_size.x <= 0 or frame_size.y <= 0:
 				return
 			camera_texture.texture = ImageTexture.create_from_image(Image.create_empty(frame_size.x, frame_size.y, false, Image.FORMAT_RGB8))
@@ -271,11 +271,11 @@ func _on_camera_format_changed() -> void:
 			y.which_feed = CameraServer.FEED_Y_IMAGE
 			uv.which_feed = CameraServer.FEED_CBCR_IMAGE
 			frame_size = y.get_size()
-			var material := ShaderMaterial.new()
-			material.shader = preload("res://shaders/yuv420_to_rgb.gdshader")
-			material.set_shader_parameter("texture_y", y)
-			material.set_shader_parameter("texture_uv", uv)
-			camera_texture.material = material
+			var conversion_material := ShaderMaterial.new()
+			conversion_material.shader = preload("res://shaders/yuv420_to_rgb.gdshader")
+			conversion_material.set_shader_parameter("texture_y", y)
+			conversion_material.set_shader_parameter("texture_uv", uv)
+			camera_texture.material = conversion_material
 			if frame_size.x <= 0 or frame_size.y <= 0:
 				return
 			camera_texture.texture = ImageTexture.create_from_image(Image.create_empty(frame_size.x, frame_size.y, false, Image.FORMAT_RGB8))
@@ -285,11 +285,11 @@ func _on_camera_format_changed() -> void:
 	if frame_size.x <= 0 or frame_size.y <= 0:
 		return
 	camera_texture.size = Vector2(frame_size)
-	var rotation: float = _camera_feed.feed_transform.get_rotation()
+	var feed_rotation: float = _camera_feed.feed_transform.get_rotation()
 	if camera_texture.flip_h:
-		rotation *= -1.0
-	var rotated_size := Vector2(frame_size).rotated(rotation)
-	camera_texture.rotation = rotation
+		feed_rotation *= -1.0
+	var rotated_size := Vector2(frame_size).rotated(feed_rotation)
+	camera_texture.rotation = feed_rotation
 	camera_texture.position = -Vector2(minf(rotated_size.x, 0.0), minf(rotated_size.y, 0.0))
 	camera_viewport.size = Vector2i(roundi(absf(rotated_size.x)), roundi(absf(rotated_size.y)))
 	preview.texture = camera_viewport.get_texture()
@@ -363,31 +363,31 @@ func _normalise_side(label: String) -> String:
 	return side
 
 
-func _set_hand_state(side: String, position: Vector2, visible: bool, timestamp_ms: int) -> void:
+func _set_hand_state(side: String, hand_tip_position: Vector2, hand_is_visible: bool, timestamp_ms: int) -> void:
 	if side == "right":
-		if visible:
+		if hand_is_visible:
 			_last_right_seen_ms = timestamp_ms
-		if visible == right_hand_visible and (not visible or position == right_hand_position):
+		if hand_is_visible == right_hand_visible and (not hand_is_visible or hand_tip_position == right_hand_position):
 			return
-		if not visible and right_hand_visible:
+		if not hand_is_visible and right_hand_visible:
 			_clear_left_command()
-		right_hand_visible = visible
-		right_hand_position = position
-		has_hand = visible
-		hand_position = position
-		right_hand_position_changed.emit(position, visible)
-		hand_position_changed.emit(position, visible)
+		right_hand_visible = hand_is_visible
+		right_hand_position = hand_tip_position
+		has_hand = hand_is_visible
+		hand_position = hand_tip_position
+		right_hand_position_changed.emit(hand_tip_position, hand_is_visible)
+		hand_position_changed.emit(hand_tip_position, hand_is_visible)
 	else:
-		if visible == left_hand_visible and (not visible or position == left_hand_position):
+		if hand_is_visible == left_hand_visible and (not hand_is_visible or hand_tip_position == left_hand_position):
 			return
-		left_hand_visible = visible
-		left_hand_position = position
-		left_hand_position_changed.emit(position, visible)
+		left_hand_visible = hand_is_visible
+		left_hand_position = hand_tip_position
+		left_hand_position_changed.emit(hand_tip_position, hand_is_visible)
 
 
-func _on_hand_position_changed(position: Vector2, visible: bool) -> void:
+func _on_hand_position_changed(hand_tip_position: Vector2, hand_is_visible: bool) -> void:
 	const CURSOR_OFFSET := Vector2(0, -20)
-	if visible:
+	if hand_is_visible:
 		cursor_texture.visible = true
 		var image_size := preview.size
 		var image_origin := preview.position
@@ -397,7 +397,7 @@ func _on_hand_position_changed(position: Vector2, visible: bool) -> void:
 				var scale_factor := minf(preview.size.x / texture_size.x, preview.size.y / texture_size.y)
 				image_size = texture_size * scale_factor
 				image_origin += (preview.size - image_size) / 2.0
-		cursor_texture.position = image_origin + position * image_size + CURSOR_OFFSET
+		cursor_texture.position = image_origin + hand_tip_position * image_size + CURSOR_OFFSET
 	else:
 		cursor_texture.visible = false
 
