@@ -7,6 +7,10 @@ extends Node
 signal observed(event: Dictionary)
 
 var gesture_confidence := 0.0
+var _focus_target: Control
+var _focus_since := 0.0
+var _focus_sent := false
+var _last_focus_event := -20.0
 
 func tracking_context() -> Dictionary:
     return {"right_hand_visible": cursor_visible if camera_connected else true, "gesture_confidence": gesture_confidence, "camera_connected": camera_connected}
@@ -131,6 +135,18 @@ func _process(_delta: float) -> void:
         cursor = get_viewport().get_mouse_position()
         _set_gesture(_kb_gesture)
 
+    if enabled:
+        var focused := target_at() if (not camera_connected or cursor_visible) else null
+        if focused != _focus_target:
+            _focus_target = focused
+            _focus_since = _now()
+            _focus_sent = false
+        if is_instance_valid(focused) and not _focus_sent and _now() - _focus_since >= 1.25 and _now() - _last_focus_event >= 8.0:
+            _focus_sent = true
+            _last_focus_event = _now()
+            var module = focused.get_meta("module")
+            NarratorClient.post_event({"game": module.title() if module is BombModule else "bomb", "kind": "focus", "context": {"target": str(focused.get_meta("desc")), "dwell_seconds": _now() - _focus_since}})
+
     if enabled and gesture != "None" and not _fired and _now() - _held_since >= HOLD_TIME:
         _fired = true
         _fire(gesture)
@@ -162,6 +178,10 @@ func _set_gesture(g: String) -> void:
 func _fire(g: String) -> void:
     if camera_connected and (not cursor_visible or gesture_confidence < 0.65):
         return
+    if g == "Open_Palm":
+        for pad in get_tree().get_nodes_in_group("continuous_input"):
+            if pad.get_global_rect().has_point(cursor):
+                return
     match g:
         "ILoveYou": _queue_press()
         "Victory": _confirm()

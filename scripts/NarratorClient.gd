@@ -1,6 +1,8 @@
 extends Node
 ## Event bridge to the narrator service. Registered as NarratorClient in project.godot.
 
+signal event_observed(event: Dictionary)
+
 signal narration_ready(text: String, audio: AudioStreamMP3, decision: Dictionary)
 signal narration_skipped(decision: Dictionary)
 signal narrator_error(message: String)
@@ -85,7 +87,8 @@ func begin_round(round_id: String, game_name: String, context: Dictionary = {}) 
 
 func update_round_state(game_name: String, facts: Dictionary) -> void:
 	## Call from game logic as timer, lives, strikes, or current module change.
-	_round_game = game_name
+	if game_name != "bomb":
+		_round_game = game_name
 	_state_context.merge(facts, true)
 	_state_context_updated_ms = Time.get_ticks_msec()
 
@@ -144,6 +147,7 @@ func post_event(event: Dictionary) -> void:
 		for i in range(_queue.size() - 1, -1, -1):
 			if _queue[i].get("kind") == "state":
 				_queue.remove_at(i)
+	event_observed.emit(payload.duplicate(true))
 	payload["session_id"] = session_id
 	payload["event_id"] = str(Time.get_ticks_usec()) + "-" + str(_sequence)
 	if kind == "game_ended":
@@ -197,15 +201,14 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 		_send_next()
 		return
 	if parsed.get("say", false):
-		var mp3_bytes := Marshalls.base64_to_raw(str(parsed.get("audio_base64", "")))
-		var audio := AudioStreamMP3.load_from_buffer(mp3_bytes)
-		if audio == null:
-			narrator_error.emit("Narrator audio was not a valid MP3")
-		else:
-			narration_ready.emit(str(parsed.get("text", "")), audio, parsed)
-			if auto_play_audio:
-				_player.stream = audio
-				_player.play()
+		var audio: AudioStreamMP3 = null
+		var encoded := str(parsed.get("audio_base64", ""))
+		if not encoded.is_empty():
+			audio = AudioStreamMP3.load_from_buffer(Marshalls.base64_to_raw(encoded))
+		narration_ready.emit(str(parsed.get("text", "")), audio, parsed)
+		if auto_play_audio and audio != null:
+			_player.stream = audio
+			_player.play()
 	else:
 		narration_skipped.emit(parsed)
 	_send_next()

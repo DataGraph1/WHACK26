@@ -1,5 +1,29 @@
 # Bot Defusal (Godot 4)
 
+Open the **root** project.godot. The old `bomb-game` folder is an archived camera prototype, not the current game.
+
+## Live narrator
+
+1. Install Ollama from https://ollama.com/download and run `ollama pull qwen2.5:1.5b`.
+2. Start Ollama (`ollama serve` if it is not already running).
+3. Copy `narrator/.env.example` to `narrator/.env` and supply your ElevenLabs key. Liam is the default voice. Never commit the key.
+4. Start `python3.12 narrator/agent_api.py` in another terminal.
+5. Open the root project in Godot and press F5. Check your hands in the preview, then choose a two- or four-module round.
+
+The game sends observed facts and real outcomes to the API. The LLM decides whether optional observations merit speech; mandatory warnings and outcomes have deterministic priority. If model or speech generation fails, the game receives a labelled factual caption fallback. An unavailable API is reported in the live feed. Fallback text is not presented as a successful model response.
+
+Use **[Player Manual revision 7](docs/PLAYER_MANUAL.md)**; earlier manuals contain incompatible rules. Every round has three minutes and three lives, with no timer acceleration. Link Recovery is always included.
+
+## Verification
+
+```sh
+python3.12 narrator/test_agent.py
+/Applications/Godot.app/Contents/MacOS/Godot --headless --path . tests/game_integration.tscn
+```
+
+The second command uses the macOS app path; on another OS, substitute your Godot executable. It checks real puzzle actions, confidence gating, link interruption/recovery, strikes, and outgoing narrator events.
+
+
 ## Run it
 1. Open this folder in Godot 4.2+ (import `project.godot`). Let it finish importing once so the class names register.
 2. Press F5. The `Bridge` autoload is already set in project.godot.
@@ -31,7 +55,7 @@ Mouse and keyboard controls return if the camera bridge stops.
 ## Files
 - scripts/bridge.gd   gesture input + confirm / press-queue rules (autoload)
 - scripts/bomb.gd     timer, strikes, serial number, batteries, indicators
-- scripts/*_module.gd the four modules (rules copied from the v6 manual)
+- scripts/*_module.gd the four modules (rules documented in docs/PLAYER_MANUAL.md revision 7)
 - scripts/main.gd, cursor.gd   bot screen, cursor drawing
 - gesture_bridge.py   MediaPipe -> UDP
 

@@ -1,9 +1,13 @@
 extends Control
 
 var _feed: Label
+var _welcome: Control
 
-func _start_round() -> void:
+func _start_round(count: int = 4) -> void:
+    if is_instance_valid(_welcome):
+        _welcome.queue_free()
     var bomb := Bomb.new()
+    bomb.module_count = count
     add_child(bomb)
     move_child(bomb, 0)
 
@@ -14,7 +18,8 @@ var _camera_preview: TextureRect
 
 func _ready() -> void:
     set_anchors_preset(Control.PRESET_FULL_RECT)
-    call_deferred("_start_round")
+    Bridge.enabled = false
+    call_deferred("_show_welcome")
 
     _make_label("BOT SCREEN", Vector2(880, 150), Vector2(360, 30), 20)
     _bot_label = _make_label("Waiting for a command...", Vector2(880, 185), Vector2(360, 200), 26)
@@ -67,3 +72,25 @@ func _unhandled_input(event: InputEvent) -> void:
     var k := event as InputEventKey
     if k != null and k.pressed and not k.echo and k.keycode == KEY_R:
         get_tree().reload_current_scene()
+
+
+func _show_welcome() -> void:
+    _welcome = Control.new()
+    add_child(_welcome)
+    var title_label := Label.new()
+    title_label.text = "BOT DEFUSAL\nRestore the link. Trust your observations."
+    title_label.position = Vector2(55, 80)
+    title_label.add_theme_font_size_override("font_size", 28)
+    _welcome.add_child(title_label)
+    var guide := Label.new()
+    guide.text = "Check the camera preview before starting.\nRight index finger moves the pointer; left hand gives commands.\nHold a gesture, release, then use Victory to confirm.\nRead docs/PLAYER_MANUAL.md revision 7.\nEvery round: three minutes, three lives.\nNo camera? Use mouse and keys 1–7."
+    guide.position = Vector2(55, 210)
+    guide.add_theme_font_size_override("font_size", 20)
+    _welcome.add_child(guide)
+    for count in [2, 4]:
+        var button := Button.new()
+        button.text = "Start — %d modules" % count
+        button.position = Vector2(55 + (count - 2) * 160, 430)
+        button.size = Vector2(270, 60)
+        button.pressed.connect(_start_round.bind(count))
+        _welcome.add_child(button)

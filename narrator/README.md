@@ -1,3 +1,5 @@
+> Current integration: the playable root project now uses `scripts/NarratorClient.gd`. Start the root project, not the older `bomb-game` camera prototype. LLM and TTS requests now each have a three-second network timeout; failures produce explicitly labelled caption fallbacks. Captions remain available without audio. Tests use Python 3.12. See the root README and PROGRESS.md for current validation status.
+
 # WHACK 2026 — live narrator service
 
 This folder is the **narrator backend only**. It contains no game UI or simulated puzzle. The game logic decides what happened; this service decides whether to speak, writes a context-aware line with a local LLM, and speaks it with ElevenLabs **Liam – Energetic, Social Media Creator**. The Godot bridge lives in [`bomb-game/scripts/NarratorClient.gd`](../bomb-game/scripts/NarratorClient.gd).
@@ -80,7 +82,7 @@ Liam is one of the account's Default voices. A speech request for Liam succeeded
 python3.12 agent_api.py
 ```
 
-The API listens on `127.0.0.1:8765` by default. Change `NARRATOR_HOST` and `NARRATOR_PORT` if Godot runs on a different device. If Godot is exported as a browser game on a different origin, set `NARRATOR_ALLOW_ORIGIN` to that exact origin. If Godot and the API run on the same computer, the default URL works. Without Ollama or the ElevenLabs key, the API returns HTTP 503 instead of inventing output.
+The API listens on `127.0.0.1:8765` by default. Change `NARRATOR_HOST` and `NARRATOR_PORT` if Godot runs on a different device. If Godot is exported as a browser game on a different origin, set `NARRATOR_ALLOW_ORIGIN` to that exact origin. If Godot and the API run on the same computer, the default URL works. Without Ollama, the service returns labelled factual fallback text; without ElevenLabs, it returns captions without audio.
 
 Configuration: `OLLAMA_URL`, `OLLAMA_MODEL`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_VOICE_NAME`, and `ELEVENLABS_MODEL_ID` can be set in the environment or local `.env`. `GET /health` reports whether a key is configured, without exposing it. The server sends `[happy]`, `[worried]`, `[tense]`, or `[urgent]` as voice directions while keeping the displayed caption free of tags. Set `ELEVENLABS_MODEL_ID=eleven_v3` if your account does not have access to v4 Turbo.
 

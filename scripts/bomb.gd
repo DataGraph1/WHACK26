@@ -99,6 +99,7 @@ func _build_ui() -> void:
 func _build_modules() -> void:
     var kinds := [WiresModule, ButtonModule, SimonModule, MemoryModule]
     kinds.shuffle()
+    kinds.push_front(LinkModule)
     for i in mini(module_count, kinds.size()):
         var m: BombModule = kinds[i].new()
         m.position = Vector2(40 + (i % 2) * 400, 150 + floori(i / 2.0) * 270)

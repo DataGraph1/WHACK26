@@ -24,3 +24,13 @@ Repo: /Users/kp/Documents/Codex/2026-11-07/i/work/WHACK26
 Godot: /Applications/Godot.app/Contents/MacOS/Godot
 Python: python3.12 (system python3 is too old).
 Credit balance is not exposed; checkpoints are periodic rather than tied to 5% remaining.
+
+## Second checkpoint update
+- Added revision 7 manual with original prose, exact current rules, Memory instructions and inspiration credit.
+- Added Link Recovery original continuous hand-input module, always selected; other modules random.
+- Added welcome/camera check screen and two/four module start buttons.
+- Added dwell focus events, recorded inspection answers in round memory, caption fallback for model/TTS failure, processing latency field, closed-round late-event suppression.
+- Seven backend tests and Godot integration checks pass, including actual wire result, three-strike ending and Link Recovery interrupted/stable holds.
+- Live ElevenLabs Liam request succeeded in 1.58 seconds (short sample). Full LLM-to-Godot voice path still needs verification.
+- Installing Ollama via Homebrew; model download/warmup pending.
+- Still required: visual UI verification, better outgoing/incoming event timeline and latency display, launch/preflight helper, live end-to-end test, novice playtest (requires people), demo guide, review synchronization and final checks.

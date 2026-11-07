@@ -2,7 +2,7 @@
 
 import unittest
 
-from agent_api import NarratorAgent, validate_event
+from agent_api import NarratorAgent, NarratorUnavailable, validate_event
 
 
 class FakeClock:
@@ -91,6 +91,35 @@ class NarratorStateTest(unittest.TestCase):
         memory = self.agent.sessions["round-1"]
         self.assertEqual(memory.inspected_targets, [])
         self.assertEqual(memory.total_wrong, 0)
+
+
+    def test_failed_speech_keeps_caption_and_memory(self):
+        def unavailable(*args):
+            raise NarratorUnavailable("test outage")
+        self.agent._speech = unavailable
+        result = self.send("result", {"lives": 2}, result="wrong")
+        self.assertTrue(result["text"].startswith("Wrong choice."))
+        self.assertEqual(result["audio_base64"], "")
+        self.assertEqual(self.agent.sessions["round-1"].total_wrong, 1)
+
+    def test_failed_llm_uses_explicit_fallback(self):
+        def unavailable(*args):
+            raise NarratorUnavailable("test outage")
+        self.agent._ask_llm = unavailable
+        result = self.send("uncertainty", {"uncertainty_reason": "missing_pointer"})
+        self.assertTrue(result["fallback"])
+        self.assertIn("Tracking", result["text"])
+
+    def test_closed_round_rejects_late_events(self):
+        self.send("game_ended", {"defused": False})
+        calls = self.agent.llm_calls
+        result = self.send("state", {"seconds_left": 9})
+        self.assertFalse(result["say"])
+        self.assertEqual(self.agent.llm_calls, calls)
+
+    def test_observed_values_are_preserved_in_memory(self):
+        self.send("inspection_result", {"target": "wire 2", "query": "blue", "observation": "No"})
+        self.assertEqual(self.agent.sessions["round-1"].inspected_targets[-1]["observation"], "No")
 
 
 if __name__ == "__main__":
