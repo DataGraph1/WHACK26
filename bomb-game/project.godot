@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="bomb-game"
-run/main_scene="uid://biackasa4yn3u"
+run/main_scene="res://scene/camera.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
 
@@ -20,7 +20,6 @@ config/icon="res://icon.svg"
 MediaPipeExternalFiles="*uid://d3neb5cwnsvqs"
 GDMPAndroid="*uid://ccp6gbqbg33bg"
 NarratorClient="*res://scripts/NarratorClient.gd"
-ModuleSelection="*uid://v4vy340i6ykc"
 
 [display]
 

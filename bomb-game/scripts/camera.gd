@@ -1,10 +1,15 @@
 class_name HandCamera
 extends Control
 
-## The index fingertip, normalized to the mirrored camera preview (0..1).
-## Only use hand_position when has_hand is true.
+## The right index fingertip drives the cursor; left-hand gestures are commands.
+## Legacy hand_position/gesture signals retain their names for existing consumers.
 signal hand_position_changed(position: Vector2, has_hand: bool)
 signal gesture_changed(value: Gesture, confidence: float)
+signal right_hand_position_changed(position: Vector2, visible: bool)
+signal left_hand_position_changed(position: Vector2, visible: bool)
+signal right_gesture_changed(value: Gesture, confidence: float)
+signal left_gesture_changed(value: Gesture, confidence: float)
+signal tracking_uncertain(reason: String, context: Dictionary)
 signal tracking_error(message: String)
 
 enum Gesture {
@@ -22,6 +27,10 @@ const HAND_MODEL := "hand_landmarker/hand_landmarker/float16/latest/hand_landmar
 const GESTURE_MODEL := "gesture_recognizer/gesture_recognizer/float16/latest/gesture_recognizer.task"
 const MODEL_CACHE := "user://GDMP"
 const FRAME_INTERVAL_MS := 66
+const MIN_GESTURE_CONFIDENCE := 0.65
+const GESTURE_HOLD_MS := 180
+const UNCERTAINTY_COOLDOWN_MS := 8000
+const MISSING_POINTER_GRACE_MS := 500
 const GESTURE_BY_NAME := {
 	"Closed_Fist": Gesture.CLOSED_FIST,
 	"Open_Palm": Gesture.OPEN_PALM,
@@ -36,10 +45,19 @@ const GESTURE_NAMES := [
 	"thumb_up", "victory", "i_love_you",
 ]
 
-var hand_position: Vector2 = Vector2(-1.0, -1.0)
-var has_hand := false
-var gesture: Gesture = Gesture.NONE
+var hand_position: Vector2 = Vector2(-1.0, -1.0) # Alias for the right hand.
+var has_hand := false # Alias for right_hand_visible.
+var gesture: Gesture = Gesture.NONE # Alias for the left-hand command.
 var gesture_confidence := 0.0
+var right_hand_position := Vector2(-1.0, -1.0)
+var left_hand_position := Vector2(-1.0, -1.0)
+var right_hand_visible := false
+var left_hand_visible := false
+var right_gesture: Gesture = Gesture.NONE
+var left_gesture: Gesture = Gesture.NONE
+var right_gesture_confidence := 0.0
+var left_gesture_confidence := 0.0
+@export var swap_handedness := false
 
 var _camera_extension: CameraServerExtension
 var _camera_feed
@@ -50,6 +68,10 @@ var _frame_pending := false
 var _last_frame_ms := 0
 var _last_hand_result_ms := 0
 var _last_gesture_result_ms := 0
+var _last_right_seen_ms := 0
+var _last_uncertainty_ms := -UNCERTAINTY_COOLDOWN_MS
+var _gesture_candidate := {"left": Gesture.NONE, "right": Gesture.NONE}
+var _gesture_candidate_since := {"left": 0, "right": 0}
 
 @onready var preview: TextureRect = $TextureRect
 @onready var status: Label = $Status
@@ -63,12 +85,19 @@ func gesture_name() -> String:
 
 func tracking_context() -> Dictionary:
 	var context := {
-		"hand_visible": has_hand,
+		"hand_visible": right_hand_visible,
 		"gesture": gesture_name(),
-		"gesture_confidence": gesture_confidence,
+		"gesture_confidence": left_gesture_confidence,
+		"right_hand_visible": right_hand_visible,
+		"left_hand_visible": left_hand_visible,
+		"left_gesture": gesture_name(),
+		"left_gesture_confidence": left_gesture_confidence,
 	}
-	if has_hand:
-		context["hand_position"] = {"x": hand_position.x, "y": hand_position.y}
+	if right_hand_visible:
+		context["hand_position"] = {"x": right_hand_position.x, "y": right_hand_position.y}
+		context["right_hand_position"] = context["hand_position"]
+	if left_hand_visible:
+		context["left_hand_position"] = {"x": left_hand_position.x, "y": left_hand_position.y}
 	return context
 
 
@@ -83,11 +112,18 @@ func _ready() -> void:
 		if not _camera_extension.permission_granted():
 			_camera_extension.request_permission()
 	hand_position_changed.connect(_on_hand_position_changed)
+	cursor_texture.visible = false
+	var narrator := get_node_or_null("/root/NarratorClient")
+	if narrator != null:
+		narrator.register_tracking_source(self)
 	_try_start_camera()
 	_prepare_models()
 
 
 func _exit_tree() -> void:
+	var narrator := get_node_or_null("/root/NarratorClient")
+	if narrator != null:
+		narrator.unregister_tracking_source(self)
 	_stop_camera()
 	_hand_task = null
 	_gesture_task = null
@@ -109,14 +145,14 @@ func _prepare_models() -> void:
 	hand_options.delegate = MediaPipeTaskBaseOptions.DELEGATE_CPU
 	hand_options.model_asset_buffer = hand_bytes
 	_hand_task = MediaPipeHandLandmarker.new()
-	_hand_task.initialize(hand_options, MediaPipeVisionTask.RUNNING_MODE_LIVE_STREAM)
+	_hand_task.initialize(hand_options, MediaPipeVisionTask.RUNNING_MODE_LIVE_STREAM, 2)
 	_hand_task.result_callback.connect(_on_hand_result)
 
 	var gesture_options := MediaPipeTaskBaseOptions.new()
 	gesture_options.delegate = MediaPipeTaskBaseOptions.DELEGATE_CPU
 	gesture_options.model_asset_buffer = gesture_bytes
 	_gesture_task = MediaPipeGestureRecognizer.new()
-	_gesture_task.initialize(gesture_options, MediaPipeVisionTask.RUNNING_MODE_LIVE_STREAM)
+	_gesture_task.initialize(gesture_options, MediaPipeVisionTask.RUNNING_MODE_LIVE_STREAM, 2)
 	_gesture_task.result_callback.connect(_on_gesture_result)
 	_models_ready = true
 	status.text = "Hand tracking ready" if _camera_feed != null else "Waiting for a camera"
@@ -129,7 +165,10 @@ func _load_model(model_path: String) -> PackedByteArray:
 		if cached != null:
 			return cached.get_buffer(cached.get_length())
 	status.text = "Downloading hand tracking models..."
-	var request: HTTPRequest = MediaPipeExternalFiles.get_model(model_path)
+	var model_loader := get_node_or_null("/root/MediaPipeExternalFiles")
+	if model_loader == null:
+		return PackedByteArray()
+	var request: HTTPRequest = model_loader.get_model(model_path)
 	if request == null:
 		return PackedByteArray()
 	var response: Array = await request.request_completed
@@ -290,25 +329,75 @@ func _apply_hand_result(result: MediaPipeHandLandmarkerResult, timestamp_ms: int
 	if timestamp_ms < _last_hand_result_ms:
 		return
 	_last_hand_result_ms = timestamp_ms
-	if result.hand_landmarks.is_empty() or result.hand_landmarks[0].landmarks.size() <= 8:
-		if has_hand:
-			has_hand = false
-			hand_position = Vector2(-1.0, -1.0)
-			hand_position_changed.emit(hand_position, false)
-		return
-	var tip: MediaPipeNormalizedLandmark = result.hand_landmarks[0].landmarks[8]
-	hand_position = Vector2(clampf(tip.x, 0.0, 1.0), clampf(tip.y, 0.0, 1.0))
-	has_hand = true
-	hand_position_changed.emit(hand_position, true)
+	var positions := {"left": Vector2(-1.0, -1.0), "right": Vector2(-1.0, -1.0)}
+	for i in range(mini(result.hand_landmarks.size(), result.handedness.size())):
+		var side := _side_from_categories(result.handedness[i])
+		if side.is_empty() or result.hand_landmarks[i].landmarks.size() <= 8:
+			continue
+		var tip: MediaPipeNormalizedLandmark = result.hand_landmarks[i].landmarks[8]
+		positions[side] = Vector2(clampf(tip.x, 0.0, 1.0), clampf(tip.y, 0.0, 1.0))
+	_apply_hand_positions(positions, timestamp_ms)
 
 
-func _on_hand_position_changed(position: Vector2, has_hand: bool):
-	var CURSOR_OFFSET : Vector2 = Vector2(0, -20)
-	
-	if has_hand:
+func _apply_hand_positions(positions: Dictionary, timestamp_ms: int) -> void:
+	_set_hand_state("right", positions["right"], positions["right"].x >= 0.0, timestamp_ms)
+	_set_hand_state("left", positions["left"], positions["left"].x >= 0.0, timestamp_ms)
+
+
+func _side_from_categories(categories) -> String:
+	if categories == null or categories.categories.is_empty():
+		return ""
+	var category: MediaPipeCategory = categories.categories[0]
+	var side: String = category.category_name
+	if side.is_empty():
+		side = category.display_name
+	return _normalise_side(side)
+
+
+func _normalise_side(label: String) -> String:
+	var side := label.to_lower()
+	if side != "left" and side != "right":
+		return ""
+	if swap_handedness:
+		return "right" if side == "left" else "left"
+	return side
+
+
+func _set_hand_state(side: String, position: Vector2, visible: bool, timestamp_ms: int) -> void:
+	if side == "right":
+		if visible:
+			_last_right_seen_ms = timestamp_ms
+		if visible == right_hand_visible and (not visible or position == right_hand_position):
+			return
+		if not visible and right_hand_visible:
+			_clear_left_command()
+		right_hand_visible = visible
+		right_hand_position = position
+		has_hand = visible
+		hand_position = position
+		right_hand_position_changed.emit(position, visible)
+		hand_position_changed.emit(position, visible)
+	else:
+		if visible == left_hand_visible and (not visible or position == left_hand_position):
+			return
+		left_hand_visible = visible
+		left_hand_position = position
+		left_hand_position_changed.emit(position, visible)
+
+
+func _on_hand_position_changed(position: Vector2, visible: bool) -> void:
+	const CURSOR_OFFSET := Vector2(0, -20)
+	if visible:
 		cursor_texture.visible = true
-		var screen_pos := position * get_viewport().get_visible_rect().size
-		cursor_texture.position = screen_pos + CURSOR_OFFSET
+		var image_size := preview.size
+		var image_origin := preview.position
+		if preview.texture != null:
+			var texture_size := preview.texture.get_size()
+			if texture_size.x > 0 and texture_size.y > 0:
+				var scale_factor := minf(preview.size.x / texture_size.x, preview.size.y / texture_size.y)
+				image_size = texture_size * scale_factor
+				image_origin += (preview.size - image_size) / 2.0
+		cursor_texture.position = image_origin + position * image_size + CURSOR_OFFSET
 	else:
 		cursor_texture.visible = false
 
@@ -321,27 +410,96 @@ func _apply_gesture_result(result: MediaPipeGestureRecognizerResult, timestamp_m
 	if timestamp_ms < _last_gesture_result_ms:
 		return
 	_last_gesture_result_ms = timestamp_ms
-	var next_gesture: Gesture = Gesture.NONE
-	var confidence := 0.0
-	if not result.gestures.is_empty() and not result.gestures[0].categories.is_empty():
-		var category: MediaPipeCategory = result.gestures[0].categories[0]
-		next_gesture = GESTURE_BY_NAME.get(category.category_name, Gesture.NONE)
-		confidence = category.score
-	if next_gesture != gesture:
-		gesture = next_gesture
+	var observed := {
+		"left": {"gesture": Gesture.NONE, "confidence": 0.0},
+		"right": {"gesture": Gesture.NONE, "confidence": 0.0},
+	}
+	for i in range(mini(result.gestures.size(), result.handedness.size())):
+		var side := _side_from_categories(result.handedness[i])
+		if side.is_empty() or result.gestures[i].categories.is_empty():
+			continue
+		var category: MediaPipeCategory = result.gestures[i].categories[0]
+		var value: Gesture = GESTURE_BY_NAME.get(category.category_name, Gesture.NONE)
+		if value != Gesture.NONE and category.score < MIN_GESTURE_CONFIDENCE:
+			if side == "left":
+				_emit_uncertain("low_gesture_confidence", {
+					"observed_gesture": category.category_name,
+					"confidence": category.score,
+				})
+			continue
+		observed[side] = {"gesture": value, "confidence": category.score}
+	_apply_gesture_observations(observed, timestamp_ms)
+
+
+func _apply_gesture_observations(observed: Dictionary, timestamp_ms: int) -> void:
+	for side in ["left", "right"]:
+		_update_stable_gesture(side, observed[side]["gesture"], observed[side]["confidence"], timestamp_ms)
+
+
+func _update_stable_gesture(side: String, value: Gesture, confidence: float, timestamp_ms: int) -> void:
+	if _gesture_candidate[side] != value:
+		_gesture_candidate[side] = value
+		_gesture_candidate_since[side] = timestamp_ms
+		return
+	if timestamp_ms - int(_gesture_candidate_since[side]) < GESTURE_HOLD_MS:
+		return
+	if side == "left":
+		if value != Gesture.NONE and not right_hand_visible:
+			if timestamp_ms - _last_right_seen_ms > MISSING_POINTER_GRACE_MS:
+				_emit_uncertain("right_hand_missing", {"left_gesture": GESTURE_NAMES[value]})
+			return
+		left_gesture_confidence = confidence
 		gesture_confidence = confidence
-		gesture_changed.emit(gesture, gesture_confidence)
+		if left_gesture == value:
+			return
+		left_gesture = value
+		gesture = value
+		left_gesture_changed.emit(value, confidence)
+		gesture_changed.emit(value, confidence)
 	else:
-		gesture_confidence = confidence
+		right_gesture_confidence = confidence
+		if right_gesture == value:
+			return
+		right_gesture = value
+		right_gesture_changed.emit(value, confidence)
+
+
+func _emit_uncertain(reason: String, details: Dictionary = {}) -> void:
+	var now_ms := Time.get_ticks_msec()
+	if now_ms - _last_uncertainty_ms < UNCERTAINTY_COOLDOWN_MS:
+		return
+	_last_uncertainty_ms = now_ms
+	var context := tracking_context()
+	context.merge(details, true)
+	tracking_uncertain.emit(reason, context)
+	if is_inside_tree():
+		var narrator := get_node_or_null("/root/NarratorClient")
+		if narrator != null:
+			narrator.report_uncertainty(reason, context)
 
 
 func _clear_tracking() -> void:
-	has_hand = false
-	hand_position = Vector2(-1.0, -1.0)
-	hand_position_changed.emit(hand_position, false)
-	gesture = Gesture.NONE
+	_set_hand_state("right", Vector2(-1.0, -1.0), false, Time.get_ticks_msec())
+	_set_hand_state("left", Vector2(-1.0, -1.0), false, Time.get_ticks_msec())
+	_clear_left_command()
+	_gesture_candidate["right"] = Gesture.NONE
+	_gesture_candidate_since["right"] = 0
+	if right_gesture != Gesture.NONE:
+		right_gesture = Gesture.NONE
+		right_gesture_changed.emit(Gesture.NONE, 0.0)
+	right_gesture_confidence = 0.0
+
+
+func _clear_left_command() -> void:
+	_gesture_candidate["left"] = Gesture.NONE
+	_gesture_candidate_since["left"] = 0
+	if left_gesture != Gesture.NONE:
+		left_gesture = Gesture.NONE
+		gesture = Gesture.NONE
+		left_gesture_changed.emit(Gesture.NONE, 0.0)
+		gesture_changed.emit(Gesture.NONE, 0.0)
+	left_gesture_confidence = 0.0
 	gesture_confidence = 0.0
-	gesture_changed.emit(gesture, gesture_confidence)
 
 
 func _fail(message: String) -> void:

@@ -6,18 +6,27 @@ This folder is the **narrator backend only**. It contains no game UI or simulate
 
 Godot sends a JSON event to `POST http://127.0.0.1:8765/v1/events` using `HTTPRequest`. The API replies with caption text, the narrator's decision, and base64-encoded MP3 audio. [`NarratorClient.gd`](../bomb-game/scripts/NarratorClient.gd) is already registered as the **NarratorClient Autoload** in `bomb-game/project.godot`. It queues HTTP calls, emits `narration_ready(text, audio, decision)` for the UI caption, and plays the MP3 automatically. Set `auto_play_audio` to `false` if the UI manages audio itself.
 
-Call it from the game logic **after it knows the result**. `HandCamera.tracking_context()` returns the observed hand position and gesture for event context:
+Call it from the game logic **after it knows the result**. `HandCamera.tracking_context()` returns the observed right-hand pointer and left-hand command for event context:
 
 ```gdscript
 var camera_bridge: HandCamera = get_tree().current_scene
 NarratorClient.begin_round("round-001", "wire_cutting", {"lives": 3, "seconds_left": 180})
+NarratorClient.update_round_state("wire_cutting", {
+    "seconds_left": 84, "lives": 2, "strikes": 1
+})
 var context := camera_bridge.tracking_context()
 context["lives"] = 2
 context["seconds_left"] = 84
 NarratorClient.send_result("wire_cutting", false, "cut the upper cable", context)
 ```
 
-For another mini-game, change the `game` name and action. You can send other live events through `post_event`, for example `kind: "focus"`, `"time_warning"`, `"last_life"`, or `"game_ended"`. Use a new `round_id` each round. The `context` dictionary should contain **observed game facts**, such as module name, hovered part, time and lives. The current `bomb-game` upload has no puzzle result or timer logic yet; the running game must call this API when those facts exist. See the [bomb-game integration notes](../bomb-game/README.md).
+For another mini-game, change the `game` name and action. You can send other live events through `post_event`, for example `kind: "focus"` or `"inspection_request"`. `end_round` sends a game-end event and stops heartbeats. Use a new `round_id` each round. The `context` dictionary should contain **observed game facts**, such as module name, hovered part, time and lives. The current `bomb-game` upload has no puzzle result or timer logic yet; the running game must call `update_round_state` as those facts change. See the [bomb-game integration notes](../bomb-game/README.md).
+
+### Live pacing, uncertainty, and memory
+
+After `begin_round`, the Godot client sends a `state` heartbeat about once per second. It includes elapsed and idle time, both hands' tracking context, and any fresh game facts supplied through `update_round_state` within the last five seconds. Fresh state and tracking facts are merged into other events too, so a result can reflect the current pressure. The server handles routine state updates without an LLM call. It asks the LLM to speak when the timer first passes 60, 30, or 10 seconds; when the player reaches the last life; or when the right hand is visible and no game action has happened for at least 12 seconds. Hesitation prompts have a 20-second cooldown. Camera uncertainty events have an eight-second cooldown and ask for a repeat instead of guessing. Explicit result and end events still speak.
+
+The agent remembers visited games, inspected targets, recent events and spoken lines, plus its wrong-answer streak and total mistakes. The LLM sees this memory to avoid repetition and adapt its tone. `begin_round` resets the memory. The server's response has `trigger`, `observed_kind`, and a short `reason` for the optional live feed. Timer and life facts are always provided by the game; the agent does not invent them.
 
 ### Event contract
 
@@ -25,10 +34,10 @@ For another mini-game, change the `game` name and action. You can send other liv
 {
   "session_id": "round-001",
   "event_id": "unique-event-id",
-  "game": "keypad",
+  "game": "wires",
   "kind": "result",
   "result": "correct",
-  "action": "pressed the star key",
+  "action": "cut wire 2",
   "context": {"lives": 2, "seconds_left": 84}
 }
 ```
@@ -38,7 +47,7 @@ For another mini-game, change the `game` name and action. You can send other liv
 ```json
 {
   "say": true,
-  "text": "Correct! That star key clicked into place; keep the momentum going.",
+  "text": "Correct! That module is safely behind us; keep moving.",
   "mood": "cheerful",
   "reason": "A confirmed result should be acknowledged",
   "voice": "Liam - Energetic, Social Media Creator",
@@ -47,11 +56,13 @@ For another mini-game, change the `game` name and action. You can send other liv
   "audio_base64": "...",
   "event_id": "unique-event-id",
   "session_id": "round-001",
-  "game": "keypad"
+  "game": "wires",
+  "trigger": "result",
+  "observed_kind": "result"
 }
 ```
 
-The LLM sees the current event, recent events, previous lines, and wrong-answer streak. It decides when to stay quiet on routine events and writes lines from the supplied facts. The server adds the verified correct/wrong prefix itself. Results and urgent warnings always speak. Duplicate event IDs are ignored. The `reason` field is for a live agent feed; it is not spoken.
+The LLM sees the current event, recent events, previous lines, and round memory. It decides when to stay quiet on routine events and writes lines from supplied facts. The server adds the verified correct/wrong prefix itself. Results and urgent warnings always speak. Duplicate event IDs are ignored. The `reason` field is for a live agent feed; it is not spoken.
 
 **Only correct/wrong is insufficient for game-specific speech.** At minimum send `game`; send `action` and `context` for descriptions of the specific module, timer and lives. The narrator will not infer those details from a binary result.
 
