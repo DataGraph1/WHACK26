@@ -96,6 +96,7 @@ try:
         frame_number += 1
 
         gesture, has_cursor = "None", False
+        confidence = 0.0
         for i, hand in enumerate(result.handedness):
             if not hand:
                 continue
@@ -104,6 +105,7 @@ try:
                 side = "Right" if side == "Left" else "Left"
             if side == "Left" and i < len(result.gestures) and result.gestures[i]:
                 gesture = result.gestures[i][0].category_name
+                confidence = result.gestures[i][0].score
             elif side == "Right" and i < len(result.hand_landmarks) and len(result.hand_landmarks[i]) > 8:
                 tip = result.hand_landmarks[i][8]            # index fingertip
                 tx = min(max((tip.x - MARGIN) / (1 - 2 * MARGIN), 0.0), 1.0)
@@ -113,7 +115,7 @@ try:
                 has_cursor = True
 
         packet = {"x": cx, "y": cy, "has_cursor": has_cursor,
-                  "gesture": gesture, "hands": len(result.handedness), "camera_index": camera_index}
+                  "gesture": gesture, "confidence": confidence, "hands": len(result.handedness), "camera_index": camera_index}
         if frame_number % PREVIEW_EVERY == 0:
             small_frame = cv2.resize(frame, PREVIEW_SIZE, interpolation=cv2.INTER_AREA)
             encoded_ok, jpeg = cv2.imencode(".jpg", small_frame, [cv2.IMWRITE_JPEG_QUALITY, 40])

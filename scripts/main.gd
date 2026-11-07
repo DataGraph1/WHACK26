@@ -1,5 +1,12 @@
 extends Control
 
+var _feed: Label
+
+func _start_round() -> void:
+    var bomb := Bomb.new()
+    add_child(bomb)
+    move_child(bomb, 0)
+
 var _bot_label: Label
 var _status_label: Label
 var _camera_preview: TextureRect
@@ -7,7 +14,7 @@ var _camera_preview: TextureRect
 
 func _ready() -> void:
     set_anchors_preset(Control.PRESET_FULL_RECT)
-    add_child(Bomb.new())
+    call_deferred("_start_round")
 
     _make_label("BOT SCREEN", Vector2(880, 150), Vector2(360, 30), 20)
     _bot_label = _make_label("Waiting for a command...", Vector2(880, 185), Vector2(360, 200), 26)
@@ -28,6 +35,12 @@ func _ready() -> void:
     help.modulate = Color(1, 1, 1, 0.6)
 
     add_child(preload("res://scripts/cursor.gd").new())
+    NarratorClient.narration_ready.connect(func(text: String, _audio: AudioStreamMP3, decision: Dictionary) -> void:
+        _bot_label.text = text
+        _feed.text = str(decision.get("trigger", "event")) + ": " + str(decision.get("reason", "")))
+    NarratorClient.narrator_error.connect(func(message: String) -> void: _feed.text = "Narrator unavailable: " + message)
+    _feed = _make_label("Live observer ready", Vector2(880, 590), Vector2(360, 48), 14)
+    _feed.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     Bridge.bot_said.connect(func(t: String) -> void: _bot_label.text = t)
 
 

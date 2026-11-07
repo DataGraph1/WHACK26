@@ -4,7 +4,7 @@ extends Control
 
 signal finished(won: bool)
 
-const START_TIME := 300.0
+const START_TIME := 180.0
 const INDICATOR_POOL := ["FKL", "FRK", "CLR", "SND", "BOB"]
 
 @export var module_count := 4
@@ -32,6 +32,8 @@ func _ready() -> void:
     _generate()
     _build_ui()
     _build_modules()
+    NarratorClient.register_tracking_source(Bridge)
+    NarratorClient.begin_round(str(Time.get_ticks_usec()), "bomb", {"lives": 3, "seconds_left": time_left})
 
 
 func has_indicator(label: String) -> bool:
@@ -47,7 +49,7 @@ func _generate() -> void:
     for label in INDICATOR_POOL:
         if randf() < 0.5:
             indicators.append(label)
-    has_strike_indicator = randf() < 0.75
+    has_strike_indicator = true
 
 
 func _make_serial() -> String:
@@ -68,7 +70,7 @@ func _build_ui() -> void:
     bg.set_anchors_preset(Control.PRESET_FULL_RECT)
     add_child(bg)
 
-    _timer_label = _label("05:00", Vector2(40, 10), Vector2(300, 70), 56)
+    _timer_label = _label("03:00", Vector2(40, 10), Vector2(300, 70), 56)
     _strike_label = _label("", Vector2(360, 24), Vector2(300, 40), 32)
     _update_strikes()
 
@@ -151,7 +153,8 @@ func handle(target: Control, kind: String, _value: String, _count: int) -> Strin
 func _process(delta: float) -> void:
     if over:
         return
-    time_left -= delta * (1.0 + 0.25 * strikes)   # timer runs faster after each strike
+    NarratorClient.update_round_state("bomb", {"seconds_left": time_left, "lives": maxi(0, 3 - strikes), "strikes": strikes})
+    time_left -= delta   # fixed three-minute round
     if time_left <= 0.0:
         time_left = 0.0
         _end(false)
@@ -192,4 +195,5 @@ func _end(won: bool) -> void:
     Bridge.pending = {}
     _overlay_label.text = ("BOMB DEFUSED" if won else "BOOM") + "\nPress R to restart"
     _overlay.visible = true
+    NarratorClient.end_round("bomb", {"defused": won, "seconds_left": time_left, "lives": maxi(0, 3 - strikes)})
     finished.emit(won)

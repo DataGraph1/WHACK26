@@ -16,6 +16,7 @@ config/features=PackedStringArray("4.7")
 
 [autoload]
 
+NarratorClient="*res://scripts/NarratorClient.gd"
 Bridge="*res://scripts/bridge.gd"
 
 [display]

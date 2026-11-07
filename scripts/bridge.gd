@@ -4,6 +4,13 @@ extends Node
 ##    arriving) mouse = cursor and held keys 1-7 = left-hand gestures.
 ## 2) Runs the confirm / press-queue rules from the manual.
 
+signal observed(event: Dictionary)
+
+var gesture_confidence := 0.0
+
+func tracking_context() -> Dictionary:
+    return {"right_hand_visible": cursor_visible if camera_connected else true, "gesture_confidence": gesture_confidence, "camera_connected": camera_connected}
+
 signal bot_said(text: String)
 signal camera_frame_changed(texture: Texture2D)
 
@@ -100,12 +107,22 @@ func _process(_delta: float) -> void:
             if data.get("has_cursor", false):
                 var size := get_viewport().get_visible_rect().size
                 cursor = Vector2(float(data.get("x", 0.5)), float(data.get("y", 0.5))) * size
-            _set_gesture(str(data.get("gesture", "None")))
+            gesture_confidence = float(data.get("confidence", 0.0))
+            if not cursor_visible or gesture_confidence < 0.65:
+                if not pending.is_empty():
+                    pending = {}
+                    bot_said.emit("Tracking uncertain. Command cancelled.")
+                    NarratorClient.report_uncertainty("pointer_missing_or_low_confidence")
+                _set_gesture("None")
+            else:
+                _set_gesture(str(data.get("gesture", "None")))
             if data.has("frame_jpeg"):
                 _update_camera_preview(str(data["frame_jpeg"]))
     var was_connected := camera_connected
     camera_connected = _now() - _last_packet <= UDP_TIMEOUT
     if camera_connected != was_connected:
+        pending = {}
+        _set_gesture("None")
         print("Camera bridge connected" if camera_connected else "Camera bridge disconnected")
     if not camera_connected:
         camera_index = -1
@@ -143,6 +160,8 @@ func _set_gesture(g: String) -> void:
 
 
 func _fire(g: String) -> void:
+    if camera_connected and (not cursor_visible or gesture_confidence < 0.65):
+        return
     match g:
         "ILoveYou": _queue_press()
         "Victory": _confirm()
@@ -211,6 +230,18 @@ func _confirm() -> void:
     if not is_instance_valid(p.target) or t != p.target:
         bot_said.emit("Cursor moved. Cancelled.")
         return
-    var reply: String = p.target.get_meta("module").handle(p.target, p.kind, p.value, p.count)
+    var module = p.target.get_meta("module")
+    var bomb = module.bomb if module is BombModule else module
+    var before_strikes: int = bomb.strikes
+    var was_solved: bool = module.solved if module is BombModule else false
+    var reply: String = module.handle(p.target, p.kind, p.value, p.count)
+    var game_name: String = module.title() if module is BombModule else "bomb"
+    var context := {"target": str(p.target.get_meta("desc")), "observation": reply, "seconds_left": bomb.time_left, "lives": maxi(0, 3 - bomb.strikes)}
+    if not bomb.over:
+        if p.kind == "press" and module is BombModule and not was_solved and (bomb.strikes > before_strikes or reply.begins_with("Correct") or module.solved):
+            NarratorClient.send_result(game_name, bomb.strikes == before_strikes, str(p.target.get_meta("desc")), context)
+        elif p.kind != "press":
+            context["query"] = str(p.value) if p.kind == "color" else "read"
+            NarratorClient.post_event({"game": game_name, "kind": "inspection_result", "context": context})
     if reply != "":
         bot_said.emit(reply)
