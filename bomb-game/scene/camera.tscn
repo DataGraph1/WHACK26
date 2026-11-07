@@ -1,0 +1,22 @@
+[gd_scene format=3 uid="uid://dab2d0cqhx7ms"]
+
+[ext_resource type="Script" uid="uid://gwms0tf5587b" path="res://scripts/camera.gd" id="1_udtsv"]
+
+[node name="Control" type="Control" unique_id=1081053172]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_udtsv")
+
+[node name="TextureRect" type="TextureRect" parent="." unique_id=447156093]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+stretch_mode = 5
