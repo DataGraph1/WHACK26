@@ -19,7 +19,8 @@ def load_local_config():
     if not config_path.is_file():
         return
     allowed = {
-        "ELEVENLABS_API_KEY", "ELEVENLABS_VOICE_ID", "ELEVENLABS_MODEL_ID",
+        "ELEVENLABS_API_KEY", "ELEVENLABS_VOICE_ID", "ELEVENLABS_VOICE_NAME",
+        "ELEVENLABS_MODEL_ID",
         "OLLAMA_URL", "OLLAMA_MODEL", "NARRATOR_HOST", "NARRATOR_PORT",
         "NARRATOR_ALLOW_ORIGIN",
     }
@@ -41,7 +42,8 @@ load_local_config()
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:1.5b")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
-ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "UgBBYS2sOqTuMpoF3BR0")
+ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "TX3LPaxmHKxFdv7VOQHJ")
+ELEVENLABS_VOICE_NAME = os.getenv("ELEVENLABS_VOICE_NAME", "Liam - Energetic, Social Media Creator")
 ELEVENLABS_MODEL_ID = os.getenv("ELEVENLABS_MODEL_ID", "eleven_v4_turbo")
 ALLOW_ORIGIN = os.getenv("NARRATOR_ALLOW_ORIGIN", "")
 HOST = os.getenv("NARRATOR_HOST", "127.0.0.1")
@@ -221,7 +223,7 @@ class NarratorAgent:
                 response["text"] = line
                 response["audio_base64"] = self._speech(line, response["mood"])
                 response["audio_mime_type"] = "audio/mpeg"
-                response["voice"] = "Mark - Natural Conversations"
+                response["voice"] = ELEVENLABS_VOICE_NAME
                 response["voice_id"] = ELEVENLABS_VOICE_ID
                 session.lines.append(line)
                 session.lines = session.lines[-6:]
@@ -272,7 +274,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/health":
             self._json(200, {"status": "waiting_for_game_event", "text_model": OLLAMA_MODEL,
                              "elevenlabs_key_present": bool(ELEVENLABS_API_KEY),
-                             "voice": "Mark - Natural Conversations",
+                             "voice": ELEVENLABS_VOICE_NAME,
                              "voice_id": ELEVENLABS_VOICE_ID,
                              "speech_model": ELEVENLABS_MODEL_ID})
         else:

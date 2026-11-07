@@ -1,6 +1,6 @@
 # WHACK 2026 — live narrator service
 
-This folder is the **narrator backend and Godot connection only**. It contains no game UI or simulated puzzle. The game AI decides what happened; this service decides whether to speak, writes a context-aware line with a local LLM, and speaks it with ElevenLabs **Mark – Natural Conversations**.
+This folder is the **narrator backend and Godot connection only**. It contains no game UI or simulated puzzle. The game AI decides what happened; this service decides whether to speak, writes a context-aware line with a local LLM, and speaks it with ElevenLabs **Liam – Energetic, Social Media Creator**.
 
 ## How Godot connects
 
@@ -39,8 +39,8 @@ For another mini-game, change the `game` name and action. You can send other liv
   "text": "Correct! That star key clicked into place; keep the momentum going.",
   "mood": "cheerful",
   "reason": "A confirmed result should be acknowledged",
-  "voice": "Mark - Natural Conversations",
-  "voice_id": "UgBBYS2sOqTuMpoF3BR0",
+  "voice": "Liam - Energetic, Social Media Creator",
+  "voice_id": "TX3LPaxmHKxFdv7VOQHJ",
   "audio_mime_type": "audio/mpeg",
   "audio_base64": "...",
   "event_id": "unique-event-id",
@@ -55,12 +55,12 @@ The LLM sees the current event, recent events, previous lines, and wrong-answer 
 
 ## Run the text model and ElevenLabs voice
 
-Text: [Ollama's chat API](https://docs.ollama.com/api/chat) with `qwen2.5:1.5b` by default. This model is approximately 1 GB and [Apache 2.0 licensed](https://registry.ollama.com/library/qwen2.5). Speech: [ElevenLabs' text-to-speech API](https://elevenlabs.io/docs/api-reference/text-to-speech/convert) with voice ID `UgBBYS2sOqTuMpoF3BR0` for **Mark – Natural Conversations**. The default speech model is `eleven_v4_turbo`, which [supports audio tags for expressive, real-time delivery](https://elevenlabs.io/docs/help-center/product/core-capabilities/text-to-speech/how-do-audio-tags-work-with-eleven-v3-and-v4). ElevenLabs is a hosted service and requires your own API key and available credits.
+Text: [Ollama's chat API](https://docs.ollama.com/api/chat) with `qwen2.5:1.5b` by default. This model is approximately 1 GB and [Apache 2.0 licensed](https://registry.ollama.com/library/qwen2.5). Speech: [ElevenLabs' text-to-speech API](https://elevenlabs.io/docs/api-reference/text-to-speech/convert) with voice ID `TX3LPaxmHKxFdv7VOQHJ` for **Liam – Energetic, Social Media Creator**. The default speech model is `eleven_v4_turbo`, which [supports audio tags for expressive, real-time delivery](https://elevenlabs.io/docs/help-center/product/core-capabilities/text-to-speech/how-do-audio-tags-work-with-eleven-v3-and-v4). ElevenLabs is a hosted service and requires your own API key and available credits.
 
-**Plan requirement:** In the WHACK26 ElevenLabs Free account, an authenticated request for Mark returned HTTP 402 `payment_required`: "Free users cannot use library voices via the API." Mark narration therefore needs an ElevenLabs plan that permits library voice API use. The narrator reports this error rather than playing silent or substitute audio.
+Liam is one of the account's Default voices. A speech request for Liam succeeded using the WHACK26 Free account. Voice Library voices such as Mark returned HTTP 402 `payment_required` on that account.
 
 1. Install [Ollama](https://ollama.com/download), then run `ollama pull qwen2.5:1.5b`. Start Ollama if it is not running.
-2. Create an ElevenLabs API key at [Developers → API Keys](https://elevenlabs.io/app/developers/api-keys), and make **Mark – Natural Conversations** available in your ElevenLabs voice library. Copy `.env.example` to `.env` beside `agent_api.py` and set `ELEVENLABS_API_KEY` there. The server reads this ignored local file at startup; an existing environment variable takes precedence. Keep the key out of Godot and GitHub.
+2. Create an ElevenLabs API key at [Developers → API Keys](https://elevenlabs.io/app/developers/api-keys). Copy `.env.example` to `.env` beside `agent_api.py` and set `ELEVENLABS_API_KEY` there. The server reads this ignored local file at startup; an existing environment variable takes precedence. Keep the key out of Godot and GitHub.
 3. Run this server with Python 3.10 or newer. It uses only the Python standard library:
 
 ```bash
@@ -69,6 +69,6 @@ python3.12 agent_api.py
 
 The API listens on `127.0.0.1:8765` by default. Change `NARRATOR_HOST` and `NARRATOR_PORT` if Godot runs on a different device. If Godot is exported as a browser game on a different origin, set `NARRATOR_ALLOW_ORIGIN` to that exact origin. If Godot and the API run on the same computer, the default URL works. Without Ollama or the ElevenLabs key, the API returns HTTP 503 instead of inventing output.
 
-Configuration: `OLLAMA_URL`, `OLLAMA_MODEL`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, and `ELEVENLABS_MODEL_ID` can be set in the environment or local `.env`. `GET /health` reports whether a key is configured, without exposing it. The server sends `[happy]`, `[worried]`, `[tense]`, or `[urgent]` as voice directions while keeping the displayed caption free of tags. Set `ELEVENLABS_MODEL_ID=eleven_v3` if your account does not have access to v4 Turbo.
+Configuration: `OLLAMA_URL`, `OLLAMA_MODEL`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_VOICE_NAME`, and `ELEVENLABS_MODEL_ID` can be set in the environment or local `.env`. `GET /health` reports whether a key is configured, without exposing it. The server sends `[happy]`, `[worried]`, `[tense]`, or `[urgent]` as voice directions while keeping the displayed caption free of tags. Set `ELEVENLABS_MODEL_ID=eleven_v3` if your account does not have access to v4 Turbo.
 
 For background on the bridge, see the official [Godot HTTPRequest](https://docs.godotengine.org/en/stable/classes/class_httprequest.html) and [AudioStreamMP3](https://docs.godotengine.org/en/stable/classes/class_audiostreammp3.html) documentation. The GDScript adapter targets Godot 4.4 or later.
