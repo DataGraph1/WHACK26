@@ -55,7 +55,7 @@ var _last_gesture_result_ms := 0
 @onready var status: Label = $Status
 @onready var camera_viewport: SubViewport = $CameraViewport
 @onready var camera_texture: TextureRect = $CameraViewport/TextureRect
-
+@onready var cursor_texture: TextureRect = $Cursor
 
 func gesture_name() -> String:
 	return GESTURE_NAMES[gesture]
@@ -73,15 +73,16 @@ func tracking_context() -> Dictionary:
 
 
 func _ready() -> void:
-	CameraServer.camera_feed_added.connect(_on_camera_feed_added)
-	CameraServer.camera_feed_removed.connect(_on_camera_feed_removed)
-	CameraServer.camera_feeds_updated.connect(_try_start_camera)
+	CameraServer.camera_feed_added.connect(_on_camera_feed_added, CONNECT_DEFERRED)
+	CameraServer.camera_feed_removed.connect(_on_camera_feed_removed, CONNECT_DEFERRED)
+	CameraServer.camera_feeds_updated.connect(_try_start_camera, CONNECT_DEFERRED)
 	CameraServer.monitoring_feeds = true
 	if OS.get_name() == "Windows":
 		_camera_extension = CameraServerExtension.new()
-		_camera_extension.permission_result.connect(_on_camera_permission_result)
+		_camera_extension.permission_result.connect(_on_camera_permission_result, CONNECT_DEFERRED)
 		if not _camera_extension.permission_granted():
 			_camera_extension.request_permission()
+	hand_position_changed.connect(_on_hand_position_changed)
 	_try_start_camera()
 	_prepare_models()
 
@@ -299,6 +300,17 @@ func _apply_hand_result(result: MediaPipeHandLandmarkerResult, timestamp_ms: int
 	hand_position = Vector2(clampf(tip.x, 0.0, 1.0), clampf(tip.y, 0.0, 1.0))
 	has_hand = true
 	hand_position_changed.emit(hand_position, true)
+
+
+func _on_hand_position_changed(position: Vector2, has_hand: bool):
+	var CURSOR_OFFSET : Vector2 = Vector2(0, -20)
+	
+	if has_hand:
+		cursor_texture.visible = true
+		var screen_pos := position * get_viewport().get_visible_rect().size
+		cursor_texture.position = screen_pos + CURSOR_OFFSET
+	else:
+		cursor_texture.visible = false
 
 
 func _on_gesture_result(result: MediaPipeGestureRecognizerResult, _image: MediaPipeImage, timestamp_ms: int) -> void:
