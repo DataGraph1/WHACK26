@@ -1,7 +1,7 @@
 extends Node
 ## Godot 4.4+ API adapter. Add this script as an Autoload named NarratorClient.
 
-signal narration_ready(text: String, audio: AudioStreamWAV, decision: Dictionary)
+signal narration_ready(text: String, audio: AudioStreamMP3, decision: Dictionary)
 signal narration_skipped(decision: Dictionary)
 signal narrator_error(message: String)
 
@@ -76,10 +76,10 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 		_send_next()
 		return
 	if parsed.get("say", false):
-		var wav_bytes := Marshalls.base64_to_raw(str(parsed.get("audio_base64", "")))
-		var audio := AudioStreamWAV.load_from_buffer(wav_bytes)
+		var mp3_bytes := Marshalls.base64_to_raw(str(parsed.get("audio_base64", "")))
+		var audio := AudioStreamMP3.load_from_buffer(mp3_bytes)
 		if audio == null:
-			narrator_error.emit("Narrator audio was not a valid WAV")
+			narrator_error.emit("Narrator audio was not a valid MP3")
 		else:
 			narration_ready.emit(str(parsed.get("text", "")), audio, parsed)
 	else:

@@ -1,26 +1,22 @@
-"""Live game narrator: Godot event -> local LLM decision -> Kokoro speech."""
+"""Live game narrator: Godot event -> local LLM decision -> ElevenLabs speech."""
 
 import base64
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from io import BytesIO
 import json
 import os
-from pathlib import Path
 import re
 from threading import Lock
 import time
 import urllib.error
 import urllib.request
-import wave
 
 
-HERE = Path(__file__).resolve().parent
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:1.5b")
-MODEL_PATH = Path(os.getenv("KOKORO_MODEL_PATH", HERE / "models/kokoro-v1.0.int8.onnx"))
-VOICES_PATH = Path(os.getenv("KOKORO_VOICES_PATH", HERE / "models/voices-v1.0.bin"))
-VOICE = os.getenv("NARRATOR_VOICE", "af_heart")
+ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
+ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "UgBBYS2sOqTuMpoF3BR0")
+ELEVENLABS_MODEL_ID = os.getenv("ELEVENLABS_MODEL_ID", "eleven_v4_turbo")
 ALLOW_ORIGIN = os.getenv("NARRATOR_ALLOW_ORIGIN", "")
 HOST = os.getenv("NARRATOR_HOST", "127.0.0.1")
 PORT = int(os.getenv("NARRATOR_PORT", "8765"))
@@ -81,8 +77,6 @@ class NarratorAgent:
     def __init__(self):
         self.sessions = {}
         self.lock = Lock()
-        self.voice_model = None
-        self.voice_lock = Lock()
 
     def _ask_llm(self, event, session, wrong_streak):
         payload = {
@@ -126,31 +120,29 @@ class NarratorAgent:
         return {"say": decision["say"], "text": text, "mood": mood, "reason": reason.strip()}
 
     def _speech(self, text, mood):
-        if not MODEL_PATH.is_file() or not VOICES_PATH.is_file():
-            raise NarratorUnavailable("Kokoro voice files are missing; see README.md")
+        if not ELEVENLABS_API_KEY:
+            raise NarratorUnavailable("Set ELEVENLABS_API_KEY on the narrator server")
+        # Eleven v4 Turbo interprets audio tags; keep them out of UI captions.
+        tag = {"cheerful": "[happy]", "concerned": "[worried]",
+               "tense": "[tense]", "urgent": "[urgent]"}[mood]
+        payload = {"text": f"{tag} {text}", "model_id": ELEVENLABS_MODEL_ID}
+        url = ("https://api.elevenlabs.io/v1/text-to-speech/"
+               + ELEVENLABS_VOICE_ID + "?output_format=mp3_44100_128")
+        request = urllib.request.Request(
+            url, data=json.dumps(payload).encode("utf-8"),
+            headers={"xi-api-key": ELEVENLABS_API_KEY,
+                     "Content-Type": "application/json"}, method="POST")
         try:
-            import numpy as np
-            from kokoro_onnx import Kokoro
-        except ImportError as exc:
-            raise NarratorUnavailable("Install Python packages from requirements.txt") from exc
-        with self.voice_lock:
-            try:
-                if self.voice_model is None:
-                    self.voice_model = Kokoro(str(MODEL_PATH), str(VOICES_PATH))
-                speed = {"cheerful": 1.04, "concerned": 1.02,
-                         "tense": 1.09, "urgent": 1.14}[mood]
-                samples, sample_rate = self.voice_model.create(
-                    text, voice=VOICE, speed=speed, lang="en-us")
-            except Exception as exc:
-                raise NarratorUnavailable("Kokoro synthesis failed; check the voice files") from exc
-        pcm = (np.clip(samples, -1.0, 1.0) * 32767).astype(np.int16)
-        output = BytesIO()
-        with wave.open(output, "wb") as wav:
-            wav.setnchannels(1)
-            wav.setsampwidth(2)
-            wav.setframerate(sample_rate)
-            wav.writeframes(pcm.tobytes())
-        return base64.b64encode(output.getvalue()).decode("ascii")
+            with urllib.request.urlopen(request, timeout=25) as response:
+                audio = response.read()
+        except urllib.error.HTTPError as exc:
+            raise NarratorUnavailable(
+                f"ElevenLabs returned HTTP {exc.code}; check key, voice access, model, and credits") from exc
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            raise NarratorUnavailable("ElevenLabs speech service is unavailable") from exc
+        if not audio:
+            raise NarratorUnavailable("ElevenLabs returned empty audio")
+        return base64.b64encode(audio).decode("ascii")
 
     def handle(self, event):
         # Serialise events so the agent's memory reflects their arrival order.
@@ -192,8 +184,9 @@ class NarratorAgent:
                     line = "Wrong choice. " + line + "."
                 response["text"] = line
                 response["audio_base64"] = self._speech(line, response["mood"])
-                response["audio_mime_type"] = "audio/wav"
-                response["voice"] = VOICE
+                response["audio_mime_type"] = "audio/mpeg"
+                response["voice"] = "Mark - Natural Conversations"
+                response["voice_id"] = ELEVENLABS_VOICE_ID
                 session.lines.append(line)
                 session.lines = session.lines[-6:]
                 session.last_spoken_at = time.monotonic()
@@ -242,7 +235,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/health":
             self._json(200, {"status": "waiting_for_game_event", "text_model": OLLAMA_MODEL,
-                             "voice_files_present": MODEL_PATH.is_file() and VOICES_PATH.is_file()})
+                             "elevenlabs_key_present": bool(ELEVENLABS_API_KEY),
+                             "voice": "Mark - Natural Conversations",
+                             "voice_id": ELEVENLABS_VOICE_ID,
+                             "speech_model": ELEVENLABS_MODEL_ID})
         else:
             self._json(404, {"error": "No game UI is served here"})
 
