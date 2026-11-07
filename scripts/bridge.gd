@@ -5,6 +5,7 @@ extends Node
 ## 2) Runs the confirm / press-queue rules from the manual.
 
 signal bot_said(text: String)
+signal camera_frame_changed(texture: Texture2D)
 
 const PORT := 4242
 const HOLD_TIME := 0.35        # a gesture must be held this long to register
@@ -28,6 +29,10 @@ var gesture := "None"
 var pending := {}      # {kind, value, count, target, time}
 var enabled := true
 var camera_connected := false
+var camera_index := -1
+var hand_count := 0
+var cursor_visible := false
+var camera_preview_texture: ImageTexture
 
 var _udp := PacketPeerUDP.new()
 var _camera_bridge_pid := -1
@@ -64,7 +69,7 @@ func _start_camera_bridge_after_delay() -> void:
     if not FileAccess.file_exists(python_path) or not FileAccess.file_exists(script_path):
         push_warning("Camera bridge unavailable. Install its Python dependencies in .venv to enable hand input.")
         return
-    _camera_bridge_pid = OS.create_process(python_path, PackedStringArray([script_path]))
+    _camera_bridge_pid = OS.create_process(python_path, PackedStringArray([script_path, "--no-preview"]))
     if _camera_bridge_pid < 0:
         push_warning("Camera bridge could not start. Keyboard and mouse still work.")
 
@@ -89,15 +94,23 @@ func _process(_delta: float) -> void:
         var data = JSON.parse_string(_udp.get_packet().get_string_from_utf8())
         if data is Dictionary:
             _last_packet = _now()
+            camera_index = int(data.get("camera_index", -1))
+            hand_count = int(data.get("hands", 0))
+            cursor_visible = bool(data.get("has_cursor", false))
             if data.get("has_cursor", false):
                 var size := get_viewport().get_visible_rect().size
                 cursor = Vector2(float(data.get("x", 0.5)), float(data.get("y", 0.5))) * size
             _set_gesture(str(data.get("gesture", "None")))
+            if data.has("frame_jpeg"):
+                _update_camera_preview(str(data["frame_jpeg"]))
     var was_connected := camera_connected
     camera_connected = _now() - _last_packet <= UDP_TIMEOUT
     if camera_connected != was_connected:
         print("Camera bridge connected" if camera_connected else "Camera bridge disconnected")
     if not camera_connected:
+        camera_index = -1
+        hand_count = 0
+        cursor_visible = false
         cursor = get_viewport().get_mouse_position()
         _set_gesture(_kb_gesture)
 
@@ -108,6 +121,18 @@ func _process(_delta: float) -> void:
     if not pending.is_empty() and _now() - pending.time > CONFIRM_WINDOW:
         pending = {}
         bot_said.emit("Cancelled.")
+
+
+func _update_camera_preview(encoded_jpeg: String) -> void:
+    var image := Image.new()
+    if image.load_jpg_from_buffer(Marshalls.base64_to_raw(encoded_jpeg)) != OK:
+        return
+    image.convert(Image.FORMAT_RGBA8)
+    if camera_preview_texture == null:
+        camera_preview_texture = ImageTexture.create_from_image(image)
+    else:
+        camera_preview_texture.update(image)
+    camera_frame_changed.emit(camera_preview_texture)
 
 
 func _set_gesture(g: String) -> void:

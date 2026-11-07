@@ -2,6 +2,7 @@ extends Control
 
 var _bot_label: Label
 var _status_label: Label
+var _camera_preview: TextureRect
 
 
 func _ready() -> void:
@@ -12,6 +13,13 @@ func _ready() -> void:
     _bot_label = _make_label("Waiting for a command...", Vector2(880, 185), Vector2(360, 200), 26)
     _bot_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     _status_label = _make_label("", Vector2(880, 640), Vector2(380, 60), 16)
+    _camera_preview = TextureRect.new()
+    _camera_preview.position = Vector2(995, 10)
+    _camera_preview.size = Vector2(240, 135)
+    _camera_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    _camera_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    add_child(_camera_preview)
+    Bridge.camera_frame_changed.connect(func(texture: Texture2D) -> void: _camera_preview.texture = texture)
     var help := _make_label(
         "Keyboard test (no camera needed):\nMouse = cursor. Hold a key ~0.35s:\n" +
         "1 blue   2 read   3 yellow\n4 red    5 green\n6 CONFIRM   7 cut/press\n" +
@@ -34,8 +42,9 @@ func _make_label(text: String, pos: Vector2, sz: Vector2, font_size: int) -> Lab
 
 
 func _process(_delta: float) -> void:
-    var camera_status := "connected" if Bridge.camera_connected else "off"
-    var s := "Camera: %s   |   Gesture: %s" % [camera_status, Bridge.gesture]
+    var camera_status := "connected (%d)" % Bridge.camera_index if Bridge.camera_connected else "off"
+    var s := "Camera: %s | Hands: %d | Cursor: %s\nGesture: %s" % [
+        camera_status, Bridge.hand_count, "yes" if Bridge.cursor_visible else "no", Bridge.gesture]
     if not Bridge.pending.is_empty():
         s += "   |   pending: %s" % Bridge.pending.kind
     _status_label.text = s

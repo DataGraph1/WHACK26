@@ -21,8 +21,11 @@ python3.12 -m venv .venv
 
 On Windows, use `py -3.12 -m venv .venv` and `.venv\Scripts\python -m pip install -r requirements-camera.txt`.
 Press F5 in Godot. The game starts `gesture_bridge.py` automatically if `.venv` is present.
-The webcam preview opens in a separate window, and the game status says `Camera: connected`
-once hand-tracking packets arrive. Press `q` in the preview window to stop it.
+The webcam preview appears inside the game. The status shows whether the camera is connected,
+how many hands are visible, and whether the right-hand cursor was found.
+The bridge tries the first three camera devices and skips a device that returns only black frames.
+To force a device, start `.venv/bin/python gesture_bridge.py --no-preview --camera-index 1`
+before starting Godot; the game will use that bridge instead of launching another one.
 Mouse and keyboard controls return if the camera bridge stops.
 
 ## Files
