@@ -1,14 +1,16 @@
 extends Node
-## Godot 4.4+ API adapter. Add this script as an Autoload named NarratorClient.
+## Event bridge to the narrator service. Registered as NarratorClient in project.godot.
 
 signal narration_ready(text: String, audio: AudioStreamMP3, decision: Dictionary)
 signal narration_skipped(decision: Dictionary)
 signal narrator_error(message: String)
 
 @export var api_url := "http://127.0.0.1:8765/v1/events"
+@export var auto_play_audio := true
 
 var session_id := ""
 var _http: HTTPRequest
+var _player: AudioStreamPlayer
 var _queue: Array[Dictionary] = []
 var _busy := false
 var _sequence := 0
@@ -18,6 +20,8 @@ func _ready() -> void:
 	_http = HTTPRequest.new()
 	add_child(_http)
 	_http.request_completed.connect(_on_request_completed)
+	_player = AudioStreamPlayer.new()
+	add_child(_player)
 
 
 func begin_round(round_id: String, game_name: String, context: Dictionary = {}) -> void:
@@ -82,6 +86,9 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 			narrator_error.emit("Narrator audio was not a valid MP3")
 		else:
 			narration_ready.emit(str(parsed.get("text", "")), audio, parsed)
+			if auto_play_audio:
+				_player.stream = audio
+				_player.play()
 	else:
 		narration_skipped.emit(parsed)
 	_send_next()

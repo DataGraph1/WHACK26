@@ -1,21 +1,23 @@
 # WHACK 2026 — live narrator service
 
-This folder is the **narrator backend and Godot connection only**. It contains no game UI or simulated puzzle. The game AI decides what happened; this service decides whether to speak, writes a context-aware line with a local LLM, and speaks it with ElevenLabs **Liam – Energetic, Social Media Creator**.
+This folder is the **narrator backend only**. It contains no game UI or simulated puzzle. The game logic decides what happened; this service decides whether to speak, writes a context-aware line with a local LLM, and speaks it with ElevenLabs **Liam – Energetic, Social Media Creator**. The Godot bridge lives in [`bomb-game/scripts/NarratorClient.gd`](../bomb-game/scripts/NarratorClient.gd).
 
 ## How Godot connects
 
-Godot sends a JSON event to `POST http://127.0.0.1:8765/v1/events` using `HTTPRequest`. The API replies with caption text, the narrator's decision, and base64-encoded MP3 audio. [GodotNarratorClient.gd](GodotNarratorClient.gd) queues HTTP calls and emits `narration_ready(text, audio, decision)` for your UI teammate to connect to a Label and AudioStreamPlayer. Add it as an **Autoload** named `NarratorClient` in Project Settings.
+Godot sends a JSON event to `POST http://127.0.0.1:8765/v1/events` using `HTTPRequest`. The API replies with caption text, the narrator's decision, and base64-encoded MP3 audio. [`NarratorClient.gd`](../bomb-game/scripts/NarratorClient.gd) is already registered as the **NarratorClient Autoload** in `bomb-game/project.godot`. It queues HTTP calls, emits `narration_ready(text, audio, decision)` for the UI caption, and plays the MP3 automatically. Set `auto_play_audio` to `false` if the UI manages audio itself.
 
-Call it from the game or gesture AI **after it knows the result**:
+Call it from the game logic **after it knows the result**. `HandCamera.tracking_context()` returns the observed hand position and gesture for event context:
 
 ```gdscript
-NarratorClient.begin_round("round-001", "wire_cutting")
-NarratorClient.send_result("wire_cutting", false, "cut the upper cable", {
-    "lives": 2, "seconds_left": 84
-})
+var camera_bridge: HandCamera = get_tree().current_scene
+NarratorClient.begin_round("round-001", "wire_cutting", {"lives": 3, "seconds_left": 180})
+var context := camera_bridge.tracking_context()
+context["lives"] = 2
+context["seconds_left"] = 84
+NarratorClient.send_result("wire_cutting", false, "cut the upper cable", context)
 ```
 
-For another mini-game, change the `game` name and action. You can send other live events through `post_event`, for example `kind: "focus"`, `"time_warning"`, `"last_life"`, or `"game_ended"`. Use a new `round_id` each round. The `context` dictionary should contain **observed game facts**, such as module name, hovered part, time and lives. Godot's `.gd` source file does not itself contain the live game state; the running Godot project must send that state through the API.
+For another mini-game, change the `game` name and action. You can send other live events through `post_event`, for example `kind: "focus"`, `"time_warning"`, `"last_life"`, or `"game_ended"`. Use a new `round_id` each round. The `context` dictionary should contain **observed game facts**, such as module name, hovered part, time and lives. The current `bomb-game` upload has no puzzle result or timer logic yet; the running game must call this API when those facts exist. See the [bomb-game integration notes](../bomb-game/README.md).
 
 ### Event contract
 

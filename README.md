@@ -1,3 +1,5 @@
 # WHACK26
 
-Narrator backend and Godot integration: [WHACK 2026/narrator](WHACK%202026/narrator/README.md).
+Narrator backend and Godot integration: [narrator](narrator/README.md).
+
+Godot camera and tracking bridge: [bomb-game](bomb-game/README.md).

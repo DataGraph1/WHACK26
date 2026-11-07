@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://dab2d0cqhx7ms"]
 
-[ext_resource type="Script" uid="uid://gwms0tf5587b" path="res://scripts/camera.gd" id="1_udtsv"]
+[ext_resource type="Script" uid="uid://bj11w5ia318jj" path="res://scripts/camera.gd" id="1_udtsv"]
 
 [node name="Control" type="Control" unique_id=1081053172]
 layout_mode = 3
@@ -20,3 +20,25 @@ grow_horizontal = 2
 grow_vertical = 2
 expand_mode = 1
 stretch_mode = 5
+
+[node name="Status" type="Label" parent="." unique_id=1350081692]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 40.0
+grow_horizontal = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 8
+theme_override_font_sizes/font_size = 22
+text = "Starting camera..."
+horizontal_alignment = 1
+
+[node name="CameraViewport" type="SubViewport" parent="." unique_id=190624090]
+disable_3d = true
+size = Vector2i(640, 480)
+render_target_update_mode = 4
+
+[node name="TextureRect" type="TextureRect" parent="CameraViewport" unique_id=113901325]
+offset_right = 640.0
+offset_bottom = 480.0

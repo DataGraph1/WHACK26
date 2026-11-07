@@ -19,6 +19,7 @@ config/icon="res://icon.svg"
 
 MediaPipeExternalFiles="*uid://d3neb5cwnsvqs"
 GDMPAndroid="*uid://ccp6gbqbg33bg"
+NarratorClient="*res://scripts/NarratorClient.gd"
 
 [display]
 
