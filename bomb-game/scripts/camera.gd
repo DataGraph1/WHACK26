@@ -262,7 +262,7 @@ func _on_camera_format_changed() -> void:
 			camera_texture.material = conversion_material
 			if frame_size.x <= 0 or frame_size.y <= 0:
 				return
-			camera_texture.texture = ImageTexture.create_from_image(Image.create_empty(frame_size.x, frame_size.y, false, Image.FORMAT_RGB8))
+			camera_texture.texture = ImageTexture.create_from_image(Image.create_empty(frame_size.x, frame_size.y, false, Image.FORMAT_RGBA8))
 		CameraFeed.FEED_YCBCR_SEP:
 			var y := CameraTexture.new()
 			var uv := CameraTexture.new()
@@ -278,7 +278,7 @@ func _on_camera_format_changed() -> void:
 			camera_texture.material = conversion_material
 			if frame_size.x <= 0 or frame_size.y <= 0:
 				return
-			camera_texture.texture = ImageTexture.create_from_image(Image.create_empty(frame_size.x, frame_size.y, false, Image.FORMAT_RGB8))
+			camera_texture.texture = ImageTexture.create_from_image(Image.create_empty(frame_size.x, frame_size.y, false, Image.FORMAT_RGBA8))
 		_:
 			_fail("Unsupported camera pixel format")
 			return
