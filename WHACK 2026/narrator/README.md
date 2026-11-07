@@ -57,6 +57,8 @@ The LLM sees the current event, recent events, previous lines, and wrong-answer 
 
 Text: [Ollama's chat API](https://docs.ollama.com/api/chat) with `qwen2.5:1.5b` by default. This model is approximately 1 GB and [Apache 2.0 licensed](https://registry.ollama.com/library/qwen2.5). Speech: [ElevenLabs' text-to-speech API](https://elevenlabs.io/docs/api-reference/text-to-speech/convert) with voice ID `UgBBYS2sOqTuMpoF3BR0` for **Mark – Natural Conversations**. The default speech model is `eleven_v4_turbo`, which [supports audio tags for expressive, real-time delivery](https://elevenlabs.io/docs/help-center/product/core-capabilities/text-to-speech/how-do-audio-tags-work-with-eleven-v3-and-v4). ElevenLabs is a hosted service and requires your own API key and available credits.
 
+**Plan requirement:** In the WHACK26 ElevenLabs Free account, an authenticated request for Mark returned HTTP 402 `payment_required`: "Free users cannot use library voices via the API." Mark narration therefore needs an ElevenLabs plan that permits library voice API use. The narrator reports this error rather than playing silent or substitute audio.
+
 1. Install [Ollama](https://ollama.com/download), then run `ollama pull qwen2.5:1.5b`. Start Ollama if it is not running.
 2. Create an ElevenLabs API key at [Developers → API Keys](https://elevenlabs.io/app/developers/api-keys), and make **Mark – Natural Conversations** available in your ElevenLabs voice library. Copy `.env.example` to `.env` beside `agent_api.py` and set `ELEVENLABS_API_KEY` there. The server reads this ignored local file at startup; an existing environment variable takes precedence. Keep the key out of Godot and GitHub.
 3. Run this server with Python 3.10 or newer. It uses only the Python standard library:

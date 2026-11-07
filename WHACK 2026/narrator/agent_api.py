@@ -162,6 +162,16 @@ class NarratorAgent:
             with urllib.request.urlopen(request, timeout=25) as response:
                 audio = response.read()
         except urllib.error.HTTPError as exc:
+            if exc.code == 402:
+                try:
+                    detail = json.loads(exc.read().decode("utf-8")).get("detail", {})
+                except (ValueError, UnicodeError):
+                    detail = {}
+                if (isinstance(detail, dict)
+                        and detail.get("status") == "payment_required"
+                        and "library voices" in str(detail.get("message", "")).lower()):
+                    raise NarratorUnavailable(
+                        "The selected ElevenLabs library voice requires a paid plan for API use") from exc
             raise NarratorUnavailable(
                 f"ElevenLabs returned HTTP {exc.code}; check key, voice access, model, and credits") from exc
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
