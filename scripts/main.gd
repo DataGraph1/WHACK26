@@ -34,7 +34,8 @@ func _make_label(text: String, pos: Vector2, sz: Vector2, font_size: int) -> Lab
 
 
 func _process(_delta: float) -> void:
-    var s := "Gesture: %s" % Bridge.gesture
+    var camera_status := "connected" if Bridge.camera_connected else "off"
+    var s := "Camera: %s   |   Gesture: %s" % [camera_status, Bridge.gesture]
     if not Bridge.pending.is_empty():
         s += "   |   pending: %s" % Bridge.pending.kind
     _status_label.text = s

@@ -40,42 +40,56 @@ recognizer = vision.GestureRecognizer.create_from_options(
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 cap = cv2.VideoCapture(0)
-start = time.time()
+if not cap.isOpened():
+    raise RuntimeError("Could not open camera 0. Check macOS camera permission and close other camera apps.")
+print("Camera open. Sending hand gestures to Godot on 127.0.0.1:4242. Press q in the preview to stop.", flush=True)
+start = time.monotonic()
 cx, cy = 0.5, 0.5
+failed_reads = 0
 
-while cap.isOpened():
-    ok, frame = cap.read()
-    if not ok:
-        break
-    # Mirror the frame (selfie view). MediaPipe's Left/Right labels then match your real hands.
-    frame = cv2.flip(frame, 1)
-    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-    result = recognizer.recognize_for_video(image, int((time.time() - start) * 1000))
+try:
+    while cap.isOpened():
+        ok, frame = cap.read()
+        if not ok:
+            failed_reads += 1
+            if failed_reads >= 30:
+                raise RuntimeError("Camera opened but did not return frames for 3 seconds.")
+            time.sleep(0.1)
+            continue
+        failed_reads = 0
+        # Mirror the frame (selfie view). MediaPipe's Left/Right labels then match your real hands.
+        frame = cv2.flip(frame, 1)
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+        result = recognizer.recognize_for_video(image, int((time.monotonic() - start) * 1000))
 
-    gesture, has_cursor = "None", False
-    for i, hand in enumerate(result.handedness):
-        side = hand[0].category_name
-        if SWAP_HANDS:
-            side = "Right" if side == "Left" else "Left"
-        if side == "Left" and result.gestures:
-            gesture = result.gestures[i][0].category_name
-        elif side == "Right":
-            tip = result.hand_landmarks[i][8]            # index fingertip
-            tx = min(max((tip.x - MARGIN) / (1 - 2 * MARGIN), 0.0), 1.0)
-            ty = min(max((tip.y - MARGIN) / (1 - 2 * MARGIN), 0.0), 1.0)
-            cx += (tx - cx) * SMOOTH
-            cy += (ty - cy) * SMOOTH
-            has_cursor = True
+        gesture, has_cursor = "None", False
+        for i, hand in enumerate(result.handedness):
+            if not hand:
+                continue
+            side = hand[0].category_name
+            if SWAP_HANDS:
+                side = "Right" if side == "Left" else "Left"
+            if side == "Left" and i < len(result.gestures) and result.gestures[i]:
+                gesture = result.gestures[i][0].category_name
+            elif side == "Right" and i < len(result.hand_landmarks) and len(result.hand_landmarks[i]) > 8:
+                tip = result.hand_landmarks[i][8]            # index fingertip
+                tx = min(max((tip.x - MARGIN) / (1 - 2 * MARGIN), 0.0), 1.0)
+                ty = min(max((tip.y - MARGIN) / (1 - 2 * MARGIN), 0.0), 1.0)
+                cx += (tx - cx) * SMOOTH
+                cy += (ty - cy) * SMOOTH
+                has_cursor = True
 
-    packet = {"x": cx, "y": cy, "has_cursor": has_cursor, "gesture": gesture}
-    sock.sendto(json.dumps(packet).encode(), (HOST, PORT))
+        packet = {"x": cx, "y": cy, "has_cursor": has_cursor, "gesture": gesture}
+        sock.sendto(json.dumps(packet).encode(), (HOST, PORT))
 
-    cv2.putText(frame, f"left: {gesture}  cursor: {has_cursor}", (10, 30),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-    cv2.imshow("gesture bridge (q to quit)", frame)
-    if cv2.waitKey(1) & 0xFF == ord("q"):
-        break
-
-cap.release()
-cv2.destroyAllWindows()
+        cv2.putText(frame, f"left: {gesture}  cursor: {has_cursor}", (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+        cv2.imshow("gesture bridge (q to quit)", frame)
+        if cv2.waitKey(1) & 0xFF == ord("q"):
+            break
+finally:
+    cap.release()
+    cv2.destroyAllWindows()
+    recognizer.close()
+    sock.close()

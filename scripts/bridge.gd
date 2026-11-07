@@ -10,6 +10,7 @@ const PORT := 4242
 const HOLD_TIME := 0.35        # a gesture must be held this long to register
 const CONFIRM_WINDOW := 3.0    # seconds to confirm before the command is cancelled
 const UDP_TIMEOUT := 1.0       # no packets for this long -> keyboard/mouse fallback
+const CAMERA_START_DELAY := 1.25
 
 # Keys 1-7 match the gesture numbers in the manual (MediaPipe gesture ids).
 const KEY_GESTURES := {
@@ -26,8 +27,10 @@ var cursor := Vector2.ZERO
 var gesture := "None"
 var pending := {}      # {kind, value, count, target, time}
 var enabled := true
+var camera_connected := false
 
 var _udp := PacketPeerUDP.new()
+var _camera_bridge_pid := -1
 var _last_packet := -100.0
 var _held_since := 0.0
 var _fired := false
@@ -38,6 +41,32 @@ func _ready() -> void:
     var err := _udp.bind(PORT)
     if err != OK:
         push_warning("Bridge: could not bind UDP port %d (error %d). Keyboard/mouse only." % [PORT, err])
+        return
+    _start_camera_bridge_after_delay()
+
+
+func _exit_tree() -> void:
+    if _camera_bridge_pid > 0:
+        OS.kill(_camera_bridge_pid)
+    _udp.close()
+
+
+func _start_camera_bridge_after_delay() -> void:
+    if DisplayServer.get_name() == "headless":
+        return
+    await get_tree().create_timer(CAMERA_START_DELAY).timeout
+    if not is_inside_tree() or camera_connected:
+        return
+    var project_dir := ProjectSettings.globalize_path("res://")
+    var python_relative := ".venv/Scripts/python.exe" if OS.get_name() == "Windows" else ".venv/bin/python"
+    var python_path := project_dir.path_join(python_relative)
+    var script_path := project_dir.path_join("gesture_bridge.py")
+    if not FileAccess.file_exists(python_path) or not FileAccess.file_exists(script_path):
+        push_warning("Camera bridge unavailable. Install its Python dependencies in .venv to enable hand input.")
+        return
+    _camera_bridge_pid = OS.create_process(python_path, PackedStringArray([script_path]))
+    if _camera_bridge_pid < 0:
+        push_warning("Camera bridge could not start. Keyboard and mouse still work.")
 
 
 func _now() -> float:
@@ -64,7 +93,11 @@ func _process(_delta: float) -> void:
                 var size := get_viewport().get_visible_rect().size
                 cursor = Vector2(float(data.get("x", 0.5)), float(data.get("y", 0.5))) * size
             _set_gesture(str(data.get("gesture", "None")))
-    if _now() - _last_packet > UDP_TIMEOUT:
+    var was_connected := camera_connected
+    camera_connected = _now() - _last_packet <= UDP_TIMEOUT
+    if camera_connected != was_connected:
+        print("Camera bridge connected" if camera_connected else "Camera bridge disconnected")
+    if not camera_connected:
         cursor = get_viewport().get_mouse_position()
         _set_gesture(_kb_gesture)
 

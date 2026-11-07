@@ -12,8 +12,18 @@ Mouse = cursor. Hold keys 1-7 for about 0.35s (they match the gesture numbers in
 Example: hover a wire, hold 7, then hold 6 -> cut. Hover the button, tap 7 three times, then 6 -> three presses.
 
 ## Play with your hands
-`pip install mediapipe opencv-python`, run `python gesture_bridge.py`, then start the game.
-The game switches to camera input as soon as packets arrive, and back to mouse/keyboard if they stop.
+Create a Python environment in this project folder, then install the camera dependencies:
+
+```sh
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements-camera.txt
+```
+
+On Windows, use `py -3.12 -m venv .venv` and `.venv\Scripts\python -m pip install -r requirements-camera.txt`.
+Press F5 in Godot. The game starts `gesture_bridge.py` automatically if `.venv` is present.
+The webcam preview opens in a separate window, and the game status says `Camera: connected`
+once hand-tracking packets arrive. Press `q` in the preview window to stop it.
+Mouse and keyboard controls return if the camera bridge stops.
 
 ## Files
 - scripts/bridge.gd   gesture input + confirm / press-queue rules (autoload)
