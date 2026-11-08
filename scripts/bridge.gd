@@ -20,6 +20,7 @@ var _last_focus_event := -20.0
 
 func tracking_context() -> Dictionary:
     return {"right_hand_visible": cursor_visible if using_camera() else true,
+        "left_hand_visible": left_detected if using_camera() else true,
         "gesture_confidence": gesture_confidence, "pointer_confidence": pointer_confidence,
         "camera_connected": camera_connected, "control_mode": "camera" if using_camera() else "keyboard"}
 
@@ -50,6 +51,8 @@ var enabled := true
 var camera_connected := false
 var camera_index := -1
 var hand_count := 0
+var left_detected := false
+var right_detected := false
 var cursor_visible := false
 var camera_preview_texture: ImageTexture
 
@@ -128,6 +131,8 @@ func _process(_delta: float) -> void:
     if not camera_connected:
         camera_index = -1
         hand_count = 0
+        left_detected = false
+        right_detected = false
         cursor_visible = false
         cursor = get_viewport().get_mouse_position()
         _set_gesture(_kb_gesture)
@@ -170,6 +175,8 @@ func _ingest_camera_packet(data: Dictionary) -> void:
     camera_index = int(data.get("camera_index", -1))
     hand_count = int(data.get("hands", 0))
     cursor_visible = bool(data.get("has_cursor", false))
+    left_detected = bool(data.get("left_detected", str(data.get("gesture", "None")) != "None"))
+    right_detected = bool(data.get("right_detected", cursor_visible))
     if cursor_visible:
         var size := get_viewport().get_visible_rect().size
         cursor = Vector2(float(data.get("x", 0.5)), float(data.get("y", 0.5))) * size
@@ -208,7 +215,8 @@ func _set_gesture(g: String) -> void:
 
 
 func _fire(g: String) -> void:
-    if using_camera() and (not cursor_visible or pointer_confidence < 0.65 or gesture_confidence < 0.65):
+    if using_camera() and (not left_detected or not right_detected or not cursor_visible
+            or pointer_confidence < 0.65 or gesture_confidence < 0.65):
         return
     if g == "Open_Palm":
         for pad in get_tree().get_nodes_in_group("continuous_input"):

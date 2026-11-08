@@ -5,7 +5,7 @@ This file records progress for the user's request to implement the ten review pr
 ## Done
 
 - Root playable game posts real round, focus, inspection, action result, uncertainty, state and end events to the narrator API. Captions, decision reasons and measured round-trip time appear in the game. ElevenLabs Liam audio plays from returned MP3.
-- MediaPipe camera bridge reports two hands, pointer and gesture confidence, and preview. The right pointer must be reliable for commands. Left gesture release keeps a queued command; low-confidence gestures are ignored; losing the pointer cancels pending actions. K toggles mouse/keyboard control.
+- MediaPipe camera bridge reports both hand roles separately, pointer and gesture confidence, and preview. Recognition uses the unmirrored image so anatomical hand labels stay correct; only the preview and cursor X are mirrored. Earlier code flipped frames before recognition, reversing the current MediaPipe hand-task labels. A `WHACK_SWAP_HANDS=1` override supports cameras whose drivers already mirror frames. The right pointer must be reliable for commands. Left gesture release keeps a queued command; low-confidence gestures are ignored; losing the pointer cancels pending actions. K toggles mouse/keyboard control.
 - Restarting or leaving a round cancels its outstanding narration and disables old input. The two-module demo always selects Link Recovery and Wires.
 - Countdown and lives consistently use 180 seconds and three strikes. Start screen lets the player inspect the camera before choosing a two- or four-module round.
 - Added original Link Recovery module using a continuous stable hand hold, interruption and recovery events. Four established modules remain available.
@@ -17,9 +17,9 @@ This file records progress for the user's request to implement the ten review pr
 
 - Godot 4.7.2 import and headless startup succeeded.
 - `tests/game_integration.tscn` passes for real wire result, confidence gating, left-hand gesture release, pointer loss, Link Recovery, three-strike failure and outgoing narrator events.
-- Sixteen Python narrator tests pass under Python 3.12. `launch.py --check` passes with local Godot, camera environment, Qwen 3B and configured Liam key.
+- Sixteen Python narrator tests and four hand-role tests pass under Python 3.12. `launch.py --check` passes with local Godot, camera environment, Qwen 3B and configured Liam key. Godot integration now exercises left-hand command packets and both-hand gating through a real wire action.
 - Live Godot `tests/narrator_live.tscn` performed a real wrong wire cut, observed one strike, received a Qwen 3B generated caption, and decoded Liam MP3. Recent event-to-audio round trips ranged from 2.7 to 5.3 seconds. The test disables playback so Godot can free MP3 resources cleanly at exit. Earlier visual checks showed camera preview, the two-module game and the event feed working.
-- Human novice playtesting, a complete physical hand-controlled round and speaker listening in the venue have not been completed; these need real participants and the demo environment. Model-written focus/result lines can still occasionally be awkward or need a labelled fallback. This remains a demo-quality local agent, not a reliability guarantee.
+- Human novice playtesting, a complete physical hand-controlled round, verification of both hands on the teammate's camera, and speaker listening in the venue have not been completed; these need real participants and the demo environment. Model-written focus/result lines can still occasionally be awkward or need a labelled fallback. This remains a demo-quality local agent, not a reliability guarantee.
 
 ## Before the live demonstration
 

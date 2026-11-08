@@ -42,6 +42,8 @@ func run() -> void:
         and not narrator._focus_is_current(str(target.get_meta("desc")), "MEMORY"),
         "Moved focus must reject a stale narration")
     bridge.camera_connected = true
+    bridge.left_detected = true
+    bridge.right_detected = true
     bridge.cursor_visible = false
     bridge.pointer_confidence = 0.99
     bridge.gesture_confidence = 0.99
@@ -50,6 +52,10 @@ func run() -> void:
     bridge._fire("ILoveYou")
     check(bridge.pending.is_empty(), "Missing pointer must not arm a cut")
     bridge.cursor_visible = true
+    bridge.left_detected = false
+    bridge._fire("ILoveYou")
+    check(bridge.pending.is_empty(), "Missing left hand must not arm a cut")
+    bridge.left_detected = true
     bridge.gesture_confidence = 0.2
     bridge._fire("ILoveYou")
     check(bridge.pending.is_empty(), "Uncertain gesture must not arm a cut")
@@ -66,22 +72,33 @@ func run() -> void:
     var center: Vector2 = target.get_global_rect().get_center()
     var released_command := {"has_cursor": true, "x": center.x / viewport_size.x,
         "y": center.y / viewport_size.y, "pointer_confidence": 0.99,
-        "gesture": "None", "confidence": 0.0, "hands": 2}
+        "gesture": "None", "confidence": 0.0, "hands": 2,
+        "left_detected": true, "right_detected": true}
     bridge._ingest_camera_packet(released_command)
     check(not bridge.pending.is_empty(), "Releasing left gesture must preserve queued command")
     bridge._ingest_camera_packet({"has_cursor": false, "pointer_confidence": 0.0,
-        "gesture": "Victory", "confidence": 0.99, "hands": 1})
+        "gesture": "Victory", "confidence": 0.99, "hands": 1,
+        "left_detected": true, "right_detected": false})
     check(bridge.pending.is_empty(), "Losing right pointer must cancel queued command")
     bridge._ingest_camera_packet({"has_cursor": true, "x": center.x / viewport_size.x,
         "y": center.y / viewport_size.y, "pointer_confidence": 0.99,
-        "gesture": "None", "confidence": 0.0, "hands": 2})
+        "gesture": "None", "confidence": 0.0, "hands": 2,
+        "left_detected": true, "right_detected": true})
     bridge.gesture_confidence = 0.99
     bridge._fire("ILoveYou")
     var other_index: int = (wires.correct + 1) % wires.wire_hits.size()
     bridge._cancel_pending_if_target_changed(wires.wire_hits[other_index])
     check(bridge.pending.is_empty(), "Moving to another target must cancel pending command")
-    bridge._fire("ILoveYou")
-    bridge._fire("Victory")
+    var command_packet := released_command.duplicate()
+    command_packet["gesture"] = "ILoveYou"
+    command_packet["confidence"] = 0.99
+    bridge._ingest_camera_packet(command_packet)
+    bridge._fire(bridge.gesture)
+    check(not bridge.pending.is_empty(), "Left-hand packet must queue the cut")
+    bridge._ingest_camera_packet(released_command)
+    command_packet["gesture"] = "Victory"
+    bridge._ingest_camera_packet(command_packet)
+    bridge._fire(bridge.gesture)
     check(wires.solved, "Confirmed correct wire must solve module")
     check(events[-1].kind == "result" and events[-1].result == "correct", "Actual wire result must reach narrator")
     check(events[-1].action.begins_with("cut wire") and events[-1].context.module_solved,

@@ -31,7 +31,7 @@ func _ready() -> void:
     _make_label("BOT SCREEN", Vector2(880, 150), Vector2(360, 30), 20)
     _bot_label = _make_label("Waiting for a command...", Vector2(880, 185), Vector2(360, 120), 23)
     _bot_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    _status_label = _make_label("", Vector2(880, 640), Vector2(380, 60), 16)
+    _status_label = _make_label("", Vector2(880, 640), Vector2(380, 60), 14)
     _camera_preview = TextureRect.new()
     _camera_preview.position = Vector2(995, 10)
     _camera_preview.size = Vector2(240, 135)
@@ -77,9 +77,10 @@ func _make_label(text: String, pos: Vector2, sz: Vector2, font_size: int) -> Lab
 
 func _process(_delta: float) -> void:
     var camera_status := "connected (%d)" % Bridge.camera_index if Bridge.camera_connected else "off"
-    var s := "Control: %s | Camera: %s | Hands: %d\nPointer: %s | Gesture: %s" % [
+    var s := "Control: %s | Cam: %s | Hands: %d\nLeft: %s / %s | Right: %s" % [
         "keyboard" if Bridge.keyboard_mode or not Bridge.camera_connected else "hands",
-        camera_status, Bridge.hand_count, "yes" if Bridge.cursor_visible else "no", Bridge.gesture]
+        camera_status, Bridge.hand_count, "seen" if Bridge.left_detected else "missing",
+        Bridge.gesture, "ready" if Bridge.right_detected and Bridge.cursor_visible and Bridge.pointer_confidence >= 0.65 else "missing/uncertain"]
     if not Bridge.pending.is_empty():
         s += "   |   pending: %s" % Bridge.pending.kind
     _status_label.text = s

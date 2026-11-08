@@ -20,6 +20,7 @@ import cv2
 import mediapipe as mp
 from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import vision
+from hand_roles import extract_hand_packet
 
 HOST, PORT = "127.0.0.1", 4242
 PREVIEW_SIZE = (240, 135)
@@ -29,14 +30,12 @@ MODEL = "gesture_recognizer.task"
 MODEL_URL = ("https://storage.googleapis.com/mediapipe-models/gesture_recognizer/"
              "gesture_recognizer/float16/1/gesture_recognizer.task")
 
-MARGIN = 0.10       # ignore the outer 10% of the camera so the cursor can reach the screen edges
-SMOOTH = 0.35       # 0 = frozen, 1 = no smoothing
-SWAP_HANDS = False  # set True if Left/Right come out reversed on your setup
-
 parser = argparse.ArgumentParser()
 parser.add_argument("--no-preview", action="store_true", help="Show video in Godot only")
 parser.add_argument("--camera-index", type=int, help="Use a specific webcam index")
+parser.add_argument("--swap-hands", action="store_true", help="Reverse hand roles for a camera that supplies mirrored frames")
 args = parser.parse_args()
+swap_hands = args.swap_hands or os.getenv("WHACK_SWAP_HANDS") == "1"
 
 if not os.path.exists(MODEL):
     print("Downloading gesture model...")
@@ -88,40 +87,18 @@ try:
             time.sleep(0.1)
             continue
         failed_reads = 0
-        # Mirror the frame (selfie view). MediaPipe's Left/Right labels then match your real hands.
-        frame = cv2.flip(frame, 1)
+        # MediaPipe assigns anatomical Left/Right on the raw frame. Mirror only
+        # the preview; flipping before inference reverses the task's labels.
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
         result = recognizer.recognize_for_video(image, int((time.monotonic() - start) * 1000))
         frame_number += 1
 
-        gesture, has_cursor = "None", False
-        confidence = 0.0
-        pointer_confidence = 0.0
-        for i, hand in enumerate(result.handedness):
-            if not hand:
-                continue
-            side = hand[0].category_name
-            if SWAP_HANDS:
-                side = "Right" if side == "Left" else "Left"
-            if side == "Left" and i < len(result.gestures) and result.gestures[i]:
-                gesture = result.gestures[i][0].category_name
-                confidence = result.gestures[i][0].score
-            elif side == "Right" and i < len(result.hand_landmarks) and len(result.hand_landmarks[i]) > 8:
-                pointer_confidence = hand[0].score
-                tip = result.hand_landmarks[i][8]            # index fingertip
-                tx = min(max((tip.x - MARGIN) / (1 - 2 * MARGIN), 0.0), 1.0)
-                ty = min(max((tip.y - MARGIN) / (1 - 2 * MARGIN), 0.0), 1.0)
-                cx += (tx - cx) * SMOOTH
-                cy += (ty - cy) * SMOOTH
-                has_cursor = True
-
-        packet = {"x": cx, "y": cy, "has_cursor": has_cursor,
-                  "gesture": gesture, "confidence": confidence,
-                  "pointer_confidence": pointer_confidence,
-                  "hands": len(result.handedness), "camera_index": camera_index}
+        packet = extract_hand_packet(result, (cx, cy), swap_hands=swap_hands)
+        cx, cy = packet["x"], packet["y"]
+        packet["camera_index"] = camera_index
         if frame_number % PREVIEW_EVERY == 0:
-            small_frame = cv2.resize(frame, PREVIEW_SIZE, interpolation=cv2.INTER_AREA)
+            small_frame = cv2.resize(cv2.flip(frame, 1), PREVIEW_SIZE, interpolation=cv2.INTER_AREA)
             encoded_ok, jpeg = cv2.imencode(".jpg", small_frame, [cv2.IMWRITE_JPEG_QUALITY, 40])
             if encoded_ok:
                 packet["frame_jpeg"] = base64.b64encode(jpeg).decode("ascii")
@@ -132,9 +109,10 @@ try:
         sock.sendto(payload, (HOST, PORT))
 
         if not args.no_preview:
-            cv2.putText(frame, f"left: {gesture}  cursor: {has_cursor}", (10, 30),
+            preview = cv2.flip(frame, 1)
+            cv2.putText(preview, f"left: {packet['gesture']}  right: {packet['has_cursor']}", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-            cv2.imshow("gesture bridge (q to quit)", frame)
+            cv2.imshow("gesture bridge (q to quit)", preview)
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
 finally:

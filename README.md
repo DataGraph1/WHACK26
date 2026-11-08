@@ -22,6 +22,8 @@ The launcher checks Godot, the camera environment, the local model and the voice
 
 The camera bridge starts from `.venv` automatically. On first launch it downloads the gesture model. It tries camera indices 0–2 and skips black feeds. You can force a device by starting `.venv/bin/python gesture_bridge.py --no-preview --camera-index 1` first. The game uses the existing bridge. Camera preview appears on the welcome screen before the timer starts.
 
+The status panel separately shows whether the left command hand and right pointer hand are detected. "Left: seen / None" means the hand is visible but its current pose is not a recognized command. Keep both hands apart, fully in frame and well lit. The camera image is mirrored **only for display**; MediaPipe receives the original image so it assigns the correct hand roles. If a camera driver already supplies mirrored frames and the roles still appear reversed, start with `WHACK_SWAP_HANDS=1 python3.12 launch.py` (or pass `--swap-hands` to `gesture_bridge.py`).
+
 ## Play
 
 Print [revision 7 of the field guide](docs/PLAYER_MANUAL_print.html), or read its [Markdown source](docs/PLAYER_MANUAL.md). Older v2/v6 rules are incompatible. Choose two modules for a short demo or four for a full round. Every round has 180 seconds and three lives. Link Recovery always appears; the other modules are selected randomly.
@@ -36,6 +38,7 @@ See [the judge demo guide](docs/DEMO.md) for a short presentation sequence and h
 
 ```sh
 python3.12 narrator/test_agent.py
+python3.12 -m unittest discover -s tests -p 'test_*.py'
 /Applications/Godot.app/Contents/MacOS/Godot --headless --path . tests/game_integration.tscn
 /Applications/Godot.app/Contents/MacOS/Godot --headless --path . tests/narrator_live.tscn
 ```
