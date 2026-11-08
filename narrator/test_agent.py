@@ -68,6 +68,27 @@ class NarratorStateTest(unittest.TestCase):
         self.clock.now = 140
         self.assertEqual(self.send("state", {"seconds_left": 9})["trigger"], "time_warning")
 
+    def test_intermediate_correct_stages_do_not_flood_audio(self):
+        self.send("round_started", {"lives": 3})
+        self.clock.now = 102
+        quiet = self.send("result", {"module_solved": False}, result="correct",
+                          game="MEMORY", action="press button 2")
+        self.assertFalse(quiet["say"])
+        self.assertIn("Stage accepted", quiet["reason"])
+        self.clock.now = 109
+        spoken = self.send("result", {"module_solved": False}, result="correct",
+                           game="MEMORY", action="press button 1")
+        self.assertTrue(spoken["say"])
+        self.assertTrue(spoken["text"].startswith("Correct!"))
+
+    def test_last_life_warning_overrides_stage_quiet(self):
+        self.send("round_started", {"lives": 3})
+        self.clock.now = 102
+        result = self.send("result", {"module_solved": False, "lives": 1},
+                           result="correct", game="SIMON SAYS")
+        self.assertTrue(result["say"])
+        self.assertIn("One life remains", result["text"])
+
     def test_uncertainty_has_cooldown_and_result_preserves_last_life(self):
         self.send("round_started", {"lives": 3})
         self.clock.now = 110

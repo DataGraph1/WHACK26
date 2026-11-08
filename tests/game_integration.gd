@@ -45,6 +45,8 @@ func run() -> void:
     bridge.cursor_visible = false
     bridge.pointer_confidence = 0.99
     bridge.gesture_confidence = 0.99
+    check(not narrator._focus_is_current(str(target.get_meta("desc")), "WIRES"),
+        "Lost camera pointer must invalidate a pending focus line")
     bridge._fire("ILoveYou")
     check(bridge.pending.is_empty(), "Missing pointer must not arm a cut")
     bridge.cursor_visible = true
@@ -53,6 +55,8 @@ func run() -> void:
     check(bridge.pending.is_empty(), "Uncertain gesture must not arm a cut")
     bridge.gesture_confidence = 0.99
     bridge.pointer_confidence = 0.2
+    check(not narrator._focus_is_current(str(target.get_meta("desc")), "WIRES"),
+        "Uncertain camera pointer must invalidate a pending focus line")
     bridge._fire("ILoveYou")
     check(bridge.pending.is_empty(), "Uncertain pointer must not arm a cut")
     bridge.pointer_confidence = 0.99
@@ -72,6 +76,10 @@ func run() -> void:
         "y": center.y / viewport_size.y, "pointer_confidence": 0.99,
         "gesture": "None", "confidence": 0.0, "hands": 2})
     bridge.gesture_confidence = 0.99
+    bridge._fire("ILoveYou")
+    var other_index: int = (wires.correct + 1) % wires.wire_hits.size()
+    bridge._cancel_pending_if_target_changed(wires.wire_hits[other_index])
+    check(bridge.pending.is_empty(), "Moving to another target must cancel pending command")
     bridge._fire("ILoveYou")
     bridge._fire("Victory")
     check(wires.solved, "Confirmed correct wire must solve module")

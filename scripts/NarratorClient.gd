@@ -242,6 +242,9 @@ func _focus_is_current(target_name: String, game_name: String) -> bool:
 		return false
 	if not _tracking_source.has_method("target_at"):
 		return false
+	if _tracking_source == Bridge and Bridge.using_camera() and (
+			not Bridge.cursor_visible or Bridge.pointer_confidence < 0.65):
+		return false
 	var current = _tracking_source.target_at()
 	if not is_instance_valid(current) or str(current.get_meta("desc", "")) != target_name:
 		return false

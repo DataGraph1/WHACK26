@@ -371,6 +371,14 @@ class NarratorAgent:
             elif event["kind"] == "result" and last_life:
                 pending_last_life = True
 
+            # Intermediate Simon/Memory stages already have immediate in-game
+            # acknowledgement. Narrate progress occasionally, not every press.
+            if (event["kind"] == "result" and event["result"] == "correct"
+                    and context.get("module_solved") is False
+                    and not pending_last_life
+                    and now - session.last_spoken_at < 8):
+                silent_reason = "Stage accepted; leaving room for the next live cue"
+
             wrong_streak = (session.wrong_streak + 1 if event["result"] == "wrong"
                             else 0 if event["result"] == "correct" else session.wrong_streak)
             if silent_reason:

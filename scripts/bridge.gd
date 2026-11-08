@@ -137,7 +137,9 @@ func _process(_delta: float) -> void:
         _set_gesture(_kb_gesture)
 
     if enabled:
-        var focused := target_at() if (not using_camera() or cursor_visible) else null
+        var focused := target_at() if (not using_camera() or (cursor_visible and pointer_confidence >= 0.65)) else null
+        if is_instance_valid(focused):
+            _cancel_pending_if_target_changed(focused)
         if focused != _focus_target:
             _focus_target = focused
             _focus_since = _now()
@@ -155,6 +157,12 @@ func _process(_delta: float) -> void:
     if not pending.is_empty() and _now() - pending.time > CONFIRM_WINDOW:
         pending = {}
         bot_said.emit("Cancelled.")
+
+
+func _cancel_pending_if_target_changed(current: Control) -> void:
+    if not pending.is_empty() and current != pending.target:
+        pending = {}
+        bot_said.emit("Target changed. Command cancelled.")
 
 
 func _ingest_camera_packet(data: Dictionary) -> void:
