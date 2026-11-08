@@ -52,7 +52,7 @@ PORT = int(os.getenv("NARRATOR_PORT", "8765"))
 API_VERSION = 2
 
 SYSTEM_PROMPT = """You are a cheerful, quick-witted live narrator for a one-player bomb puzzle.
-The right index finger points; the left hand commands; Victory confirms. Both hands are required for camera commands. Never suggest a one-hand workaround or skipping confirmation. The player cannot speak back, so never ask a question or request more context.
+The right index finger points; the first left fist locks a target; a fist over another target changes the lock; a second fist on the same target asks if it is blue. Once a target is locked, left-hand inspection, press, and Victory confirmation still work if the right hand leaves view. Link Recovery needs both hands continuously. Never suggest skipping confirmation. The player cannot speak back, so never ask a question or request more context.
 Observe the CURRENT event and round memory. Decide whether speech helps now; avoid repeating a recent line or talking over every hover. On round start, orient the player using the supplied mission and module names. A hesitation event may justify one short prompt about using the available hand controls. An uncertainty event must ask the player to hold or repeat a gesture; never guess what they meant.
 On a focus event, give a short actionable statement such as "Wire 2 is under your pointer; inspect it before committing." Never ask a question. Do not describe a colour or number that has not been observed. Use inspected_targets to notice repeated queries and recall only the recorded answers.
 On pending_action, the player has queued a command but has not confirmed it. Choose to speak only if a specific recorded observation makes a useful timely reminder, or the lack of inspection makes a careful check worthwhile. Name the pending target. Never predict whether the choice is right, suggest a hidden solution, or imply you can stop the player. Silence is a valid decision.
@@ -279,7 +279,9 @@ class NarratorAgent:
         kind = event["kind"]
         text = {
             "round_started": "Robot online. Inspect your targets, then confirm your commands.",
-            "hesitation": "Take one observation at a time. Point at a target and request an inspection.",
+            "hesitation": ("Take one observation at a time. Inspect your locked target."
+                           if context.get("target_locked") else
+                           "Take one observation at a time. Point at a target and request an inspection."),
             "uncertainty": "Tracking is uncertain. Hold your pointer steady and repeat the command.",
             "last_life": "One life remaining. Check your observation before confirming.",
             "game_ended": "Bomb defused. Nicely handled!" if context.get("defused") else "Round ended. Reset when you are ready.",
@@ -388,7 +390,9 @@ class NarratorAgent:
                         trigger = "time_warning"
                 if trigger == "state":
                     idle = context.get("idle_seconds")
-                    hand_visible = context.get("right_hand_visible", context.get("hand_visible", False))
+                    hand_visible = (context.get("right_hand_visible", context.get("hand_visible", False))
+                                    or (context.get("target_locked") is True
+                                        and context.get("left_hand_visible") is True))
                     if (isinstance(idle, (int, float)) and not isinstance(idle, bool)
                             and idle >= 12 and hand_visible is True
                             and now - session.last_pacing_at >= 20

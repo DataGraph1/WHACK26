@@ -46,7 +46,7 @@ func _ready() -> void:
     add_child(_camera_preview)
     Bridge.camera_frame_changed.connect(func(texture: Texture2D) -> void: _camera_preview.texture = texture)
     var help := _make_label(
-        "Keys: 1 blue / 2 read / 3 yellow / 4 red / 5 green\n6 confirm / 7 cut or press (release between presses)\nK hand or keyboard / R restart / F11 fullscreen",
+        "Keys: 1 lock / 1 again blue / 2 read / 3 yellow / 4 red / 5 green\n6 confirm / 7 cut or press (release between presses)\nK hand or keyboard / R restart / F11 fullscreen",
         Vector2(880, 565), Vector2(380, 80), 12)
     help.modulate = Color(1, 1, 1, 0.6)
 
@@ -110,6 +110,8 @@ func _process(delta: float) -> void:
         Bridge.gesture, "ready" if Bridge.right_detected and Bridge.cursor_visible and Bridge.pointer_confidence >= 0.65 else "missing/uncertain"]
     if not Bridge.pending.is_empty():
         s += "   |   pending: %s" % Bridge.pending.kind
+    if is_instance_valid(Bridge.selected_target):
+        s += "   |   locked: %s" % Bridge.selected_target.get_meta("desc")
     if not Bridge.camera_error.is_empty():
         s += "\nCAMERA ACCESS BLOCKED"
     elif not Bridge.camera_notice.is_empty():
@@ -138,7 +140,7 @@ func _show_welcome() -> void:
     title_label.add_theme_font_size_override("font_size", 28)
     _welcome.add_child(title_label)
     var guide := Label.new()
-    guide.text = "Check the camera preview before starting.\nRight index finger moves the pointer; left hand gives commands.\nHold a gesture, release, then use Victory to confirm.\nRead the printed revision 7 field guide.\nEvery round: three minutes, three lives.\nUse K to switch to mouse and keys 1–7."
+    guide.text = "Check the camera preview before starting.\nRight index finger moves the pointer; left fist locks a target.\nMove freely after locking; fist on another target changes the lock.\nHold, release, then use Victory to confirm.\nRead the printed revision 8 field guide.\nEvery round: three minutes, three lives. K enables mouse and keys 1–7."
     guide.position = Vector2(55, 210)
     guide.add_theme_font_size_override("font_size", 20)
     _welcome.add_child(guide)

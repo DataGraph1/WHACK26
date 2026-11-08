@@ -94,6 +94,15 @@ class NarratorStateTest(unittest.TestCase):
         self.clock.now = 140
         self.assertEqual(self.send("state", {"seconds_left": 9})["trigger"], "time_warning")
 
+    def test_locked_target_still_gets_pacing_without_right_hand(self):
+        self.send("round_started", {"lives": 3})
+        self.clock.now = 112
+        prompt = self.send("state", {"idle_seconds": 12, "right_hand_visible": False,
+                                     "left_hand_visible": True, "target_locked": True,
+                                     "locked_target": "wire 2"})
+        self.assertEqual(prompt["trigger"], "hesitation")
+        self.assertTrue(prompt["say"])
+
     def test_intermediate_correct_stages_do_not_flood_audio(self):
         self.send("round_started", {"lives": 3})
         self.clock.now = 102

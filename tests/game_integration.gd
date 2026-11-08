@@ -66,6 +66,47 @@ func run() -> void:
     bridge._fire("ILoveYou")
     check(bridge.pending.is_empty(), "Uncertain pointer must not arm a cut")
     bridge.pointer_confidence = 0.99
+    bridge._set_gesture("Closed_Fist")
+    bridge._fire("Closed_Fist")
+    check(bridge.selected_target == target and bridge.pending.is_empty(),
+        "First fist must lock the hovered wire without queuing an action")
+    bridge._arm("read", "")
+    var other_index: int = (wires.correct + 1) % wires.wire_hits.size()
+    bridge.cursor = wires.wire_hits[other_index].get_global_rect().get_center()
+    bridge._cancel_pending_if_target_changed(wires.wire_hits[other_index])
+    check(not bridge.pending.is_empty() and bridge.pending.target == target,
+        "A locked target must retain its queued action after the pointer moves")
+    bridge._ingest_camera_packet({"has_cursor": false, "pointer_confidence": 0.0,
+        "gesture": "Victory", "confidence": 0.99, "hands": 1,
+        "left_detected": true, "right_detected": false})
+    bridge._fire(bridge.gesture)
+    check(bridge.pending.is_empty() and events[-1].kind == "inspection_result"
+        and events[-1].context.target == str(target.get_meta("desc")),
+        "Victory must confirm an inspection on the lock even without the right hand")
+    bridge._set_gesture("None")
+    bridge._set_gesture("Closed_Fist")
+    bridge._fire("Closed_Fist")
+    check(not bridge.pending.is_empty() and bridge.pending.kind == "color"
+        and bridge.pending.value == "blue" and bridge.pending.target == target,
+        "Repeating a fist on the lock must preserve the blue query")
+    bridge.cursor_visible = true
+    bridge.right_detected = true
+    bridge.pointer_confidence = 0.99
+    bridge.cursor = Vector2(1270, 700)
+    bridge._set_gesture("None")
+    bridge._set_gesture("Closed_Fist")
+    bridge._fire("Closed_Fist")
+    check(bridge.selected_target == target and not bridge.pending.is_empty(),
+        "Fist over empty space must not change the lock or replace a queued command")
+    bridge.cursor = wires.wire_hits[other_index].get_global_rect().get_center()
+    bridge._set_gesture("None")
+    bridge._set_gesture("Closed_Fist")
+    bridge._fire("Closed_Fist")
+    check(bridge.selected_target == wires.wire_hits[other_index] and bridge.pending.is_empty(),
+        "Fist over another wire must move the lock and cancel the old command")
+    bridge.selected_target = null
+    bridge._set_gesture("None")
+    bridge.cursor = target.get_global_rect().get_center()
     bridge._fire("ILoveYou")
     check(not bridge.pending.is_empty(), "Stable hands must arm a cut")
     bridge.pending.time = bridge._now() - 0.8
@@ -90,9 +131,11 @@ func run() -> void:
         "left_detected": true, "right_detected": true})
     bridge.gesture_confidence = 0.99
     bridge._fire("ILoveYou")
-    var other_index: int = (wires.correct + 1) % wires.wire_hits.size()
     bridge._cancel_pending_if_target_changed(wires.wire_hits[other_index])
     check(bridge.pending.is_empty(), "Moving to another target must cancel pending command")
+    bridge._set_gesture("Closed_Fist")
+    bridge._fire("Closed_Fist")
+    check(bridge.selected_target == target, "Fist must lock the wire before a cut is queued")
     var command_packet := released_command.duplicate()
     command_packet["gesture"] = "ILoveYou"
     command_packet["confidence"] = 0.99
@@ -100,7 +143,14 @@ func run() -> void:
     bridge._fire(bridge.gesture)
     check(not bridge.pending.is_empty(), "Left-hand packet must queue the cut")
     var queued_id: String = str(bridge.pending.id)
-    bridge._ingest_camera_packet(released_command)
+    bridge._ingest_camera_packet({"has_cursor": false, "pointer_confidence": 0.0,
+        "gesture": "None", "confidence": 0.0, "hands": 1,
+        "left_detected": true, "right_detected": false})
+    check(not bridge.pending.is_empty() and bridge.selected_target == target,
+        "Losing the right pointer after a lock must preserve the queued cut")
+    command_packet["has_cursor"] = false
+    command_packet["pointer_confidence"] = 0.0
+    command_packet["right_detected"] = false
     command_packet["gesture"] = "Victory"
     bridge._ingest_camera_packet(command_packet)
     bridge._fire(bridge.gesture)

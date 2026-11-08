@@ -29,6 +29,7 @@ func _ready() -> void:
     set_anchors_preset(Control.PRESET_FULL_RECT)
     Bridge.enabled = true
     Bridge.pending = {}
+    Bridge.selected_target = null
     _generate()
     _build_ui()
     _build_modules()
@@ -47,6 +48,7 @@ func _exit_tree() -> void:
         NarratorClient.cancel_round()
     Bridge.enabled = false
     Bridge.pending = {}
+    Bridge.selected_target = null
 
 
 func has_indicator(label: String) -> bool:
@@ -209,6 +211,7 @@ func _end(won: bool) -> void:
     over = true
     Bridge.enabled = false
     Bridge.pending = {}
+    Bridge.selected_target = null
     _overlay_label.text = ("BOMB DEFUSED" if won else "BOOM") + "\nPress R to restart"
     _overlay.visible = true
     NarratorClient.end_round("bomb", {"defused": won, "seconds_left": time_left, "lives": maxi(0, 3 - strikes)})

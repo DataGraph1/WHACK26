@@ -13,6 +13,7 @@ func using_camera() -> bool:
 
 var gesture_confidence := 0.0
 var pointer_confidence := 0.0
+var selected_target: Control
 var _focus_target: Control
 var _focus_since := 0.0
 var _focus_sent := false
@@ -22,7 +23,9 @@ func tracking_context() -> Dictionary:
     return {"right_hand_visible": cursor_visible if using_camera() else true,
         "left_hand_visible": left_detected if using_camera() else true,
         "gesture_confidence": gesture_confidence, "pointer_confidence": pointer_confidence,
-        "camera_connected": camera_connected, "control_mode": "camera" if using_camera() else "keyboard"}
+        "camera_connected": camera_connected, "control_mode": "camera" if using_camera() else "keyboard",
+        "target_locked": is_instance_valid(selected_target),
+        "locked_target": str(selected_target.get_meta("desc", "")) if is_instance_valid(selected_target) else ""}
 
 signal bot_said(text: String)
 signal camera_frame_changed(texture: Texture2D)
@@ -35,7 +38,7 @@ const CAMERA_START_DELAY := 1.25
 
 # Keys 1-7 match the gesture numbers in the manual (MediaPipe gesture ids).
 const KEY_GESTURES := {
-    KEY_1: "Closed_Fist",   # blue
+    KEY_1: "Closed_Fist",   # lock target, or query blue on the same target
     KEY_2: "Open_Palm",     # read the symbol
     KEY_3: "Pointing_Up",   # yellow
     KEY_4: "Thumb_Down",    # red
@@ -64,6 +67,7 @@ var _last_packet := -100.0
 var _held_since := 0.0
 var _fired := false
 var _kb_gesture := "None"
+var _fist_candidate: Control
 
 
 func _ready() -> void:
@@ -107,6 +111,7 @@ func _input(event: InputEvent) -> void:
     if k != null and k.pressed and not k.echo and k.keycode == KEY_K:
         keyboard_mode = not keyboard_mode
         pending = {}
+        selected_target = null
         _set_gesture("None")
         bot_said.emit("Mouse and keyboard mode" if keyboard_mode else "Camera control mode")
         return
@@ -128,6 +133,7 @@ func _process(_delta: float) -> void:
     camera_connected = _now() - _last_packet <= UDP_TIMEOUT
     if camera_connected != was_connected:
         pending = {}
+        selected_target = null
         _set_gesture("None")
         print("Camera bridge connected" if camera_connected else "Camera bridge disconnected")
     if not camera_connected:
@@ -144,14 +150,19 @@ func _process(_delta: float) -> void:
         _set_gesture(_kb_gesture)
 
     if enabled:
+        if is_instance_valid(selected_target):
+            var selected_module = selected_target.get_meta("module", null)
+            if not selected_target.is_visible_in_tree() or (selected_module is BombModule and selected_module.solved):
+                selected_target = null
         var focused := target_at() if (not using_camera() or (cursor_visible and pointer_confidence >= 0.65)) else null
-        if is_instance_valid(focused):
+        if is_instance_valid(focused) and not is_instance_valid(selected_target):
             _cancel_pending_if_target_changed(focused)
         if focused != _focus_target:
             _focus_target = focused
             _focus_since = _now()
             _focus_sent = false
-        if is_instance_valid(focused) and not _focus_sent and _now() - _focus_since >= 1.25 and _now() - _last_focus_event >= 8.0:
+        if is_instance_valid(focused) and (not is_instance_valid(selected_target) or focused == selected_target) \
+                and not _focus_sent and _now() - _focus_since >= 1.25 and _now() - _last_focus_event >= 8.0:
             _focus_sent = true
             _last_focus_event = _now()
             var module = focused.get_meta("module")
@@ -169,6 +180,8 @@ func _process(_delta: float) -> void:
 
 
 func _cancel_pending_if_target_changed(current: Control) -> void:
+    if is_instance_valid(selected_target):
+        return
     if not pending.is_empty() and current != pending.target:
         pending = {}
         bot_said.emit("Target changed. Command cancelled.")
@@ -197,7 +210,7 @@ func _ingest_camera_packet(data: Dictionary) -> void:
         cursor = Vector2(float(data.get("x", 0.5)), float(data.get("y", 0.5))) * size
     gesture_confidence = float(data.get("confidence", 0.0))
     pointer_confidence = float(data.get("pointer_confidence", 0.0))
-    if not keyboard_mode and (not cursor_visible or pointer_confidence < 0.65):
+    if not keyboard_mode and not is_instance_valid(selected_target) and (not cursor_visible or pointer_confidence < 0.65):
         if not pending.is_empty():
             pending = {}
             bot_said.emit("Right pointer lost. Command cancelled.")
@@ -227,13 +240,17 @@ func _set_gesture(g: String) -> void:
         gesture = g
         _held_since = _now()
         _fired = false
+        _fist_candidate = target_at() if g == "Closed_Fist" and (not using_camera() or
+            (cursor_visible and pointer_confidence >= 0.65)) else null
 
 
 func _fire(g: String) -> void:
     if not enabled:
         return
-    if using_camera() and (not left_detected or not right_detected or not cursor_visible
-            or pointer_confidence < 0.65 or gesture_confidence < 0.65):
+    if using_camera() and (not left_detected or gesture_confidence < 0.65):
+        return
+    if using_camera() and not is_instance_valid(selected_target) and (
+            not right_detected or not cursor_visible or pointer_confidence < 0.65):
         return
     if g == "Open_Palm":
         for pad in get_tree().get_nodes_in_group("continuous_input"):
@@ -242,7 +259,7 @@ func _fire(g: String) -> void:
     match g:
         "ILoveYou": _queue_press()
         "Victory": _confirm()
-        "Closed_Fist": _arm("color", "blue")
+        "Closed_Fist": _lock_or_query_blue()
         "Thumb_Up": _arm("color", "green")
         "Thumb_Down": _arm("color", "red")
         "Pointing_Up": _arm("color", "yellow")
@@ -264,8 +281,29 @@ func target_at() -> Control:
     return best
 
 
+func action_target() -> Control:
+    return selected_target if is_instance_valid(selected_target) else target_at()
+
+
+func _lock_or_query_blue() -> void:
+    var pointer_ready: bool = not using_camera() or (cursor_visible and pointer_confidence >= 0.65)
+    var hovered: Control = _fist_candidate if is_instance_valid(_fist_candidate) else (
+        target_at() if pointer_ready else null)
+    if is_instance_valid(hovered) and hovered != selected_target:
+        pending = {}
+        selected_target = hovered
+        bot_said.emit("Locked %s. Move the pointer freely; fist here again to ask blue." % hovered.get_meta("desc"))
+        return
+    if is_instance_valid(selected_target) and (hovered == selected_target or not pointer_ready):
+        _arm("color", "blue")
+    elif is_instance_valid(selected_target):
+        bot_said.emit("Lock unchanged. Point at another target to move it, or fist on this one to ask blue.")
+    else:
+        bot_said.emit("Point at a target, then hold a fist to lock it.")
+
+
 func _arm(kind: String, value: String) -> void:
-    var t := target_at()
+    var t := action_target()
     if t == null:
         bot_said.emit("Nothing under the cursor.")
         return
@@ -278,7 +316,7 @@ func _arm(kind: String, value: String) -> void:
 
 ## Each I-love-you adds one press to the queue. Nothing happens until Victory.
 func _queue_press() -> void:
-    var t := target_at()
+    var t := action_target()
     if t == null:
         bot_said.emit("Nothing under the cursor.")
         return
@@ -324,7 +362,7 @@ func _confirm() -> void:
         return
     var p := pending
     pending = {}
-    var t := target_at()
+    var t := action_target()
     if not is_instance_valid(p.target) or t != p.target:
         bot_said.emit("Cursor moved. Cancelled.")
         return
@@ -333,6 +371,8 @@ func _confirm() -> void:
     var before_strikes: int = bomb.strikes
     var was_solved: bool = module.solved if module is BombModule else false
     var reply: String = module.handle(p.target, p.kind, p.value, p.count)
+    if p.kind == "press" and module is WiresModule:
+        selected_target = null  # A cut wire cannot be used again.
     var game_name: String = module.title() if module is BombModule else "bomb"
     var context := {"target": str(p.target.get_meta("desc")), "observation": reply, "seconds_left": bomb.time_left, "lives": maxi(0, 3 - bomb.strikes)}
     if not bomb.over:
