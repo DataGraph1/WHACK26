@@ -28,7 +28,7 @@ def main():
         godot = "/Applications/Godot.app/Contents/MacOS/Godot"
     python = ROOT / (".venv/Scripts/python.exe" if os.name == "nt" else ".venv/bin/python")
     print("Godot:", "ready" if godot else "missing; set GODOT_BIN")
-    print("Camera environment:", "present" if python.exists() else "missing; see README")
+    print("Camera environment:", "installed; device permission is checked when the game opens" if python.exists() else "missing; see README")
     print("ElevenLabs key:", "configured" if ELEVENLABS_API_KEY else "missing; captions only")
     owned = []
     logs = []

@@ -50,6 +50,8 @@ var pending := {}      # {kind, value, count, target, time}
 var enabled := true
 var camera_connected := false
 var camera_index := -1
+var camera_error := ""
+var camera_notice := ""
 var hand_count := 0
 var left_detected := false
 var right_detected := false
@@ -173,6 +175,17 @@ func _cancel_pending_if_target_changed(current: Control) -> void:
 
 
 func _ingest_camera_packet(data: Dictionary) -> void:
+    if data.has("camera_notice"):
+        camera_notice = str(data["camera_notice"]).left(220)
+        bot_said.emit("Waiting for Camera permission. Approve the macOS popup.")
+        return
+    if data.has("camera_error"):
+        camera_error = str(data["camera_error"]).left(220)
+        camera_notice = ""
+        bot_said.emit("Camera blocked. Allow Camera access in macOS settings, then relaunch.")
+        return
+    camera_error = ""
+    camera_notice = ""
     _last_packet = _now()
     camera_index = int(data.get("camera_index", -1))
     hand_count = int(data.get("hands", 0))

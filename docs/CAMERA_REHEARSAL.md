@@ -2,7 +2,7 @@
 
 Run on the exact laptop, webcam, room lighting and speakers planned for judging. This is a human test; the automated checks cannot certify it.
 
-1. Pull `main`, run `python3.12 launch.py`, and leave keyboard mode off. On the welcome screen, complete every **CAMERA REHEARSAL** check: both hands continuously seen for two seconds, right pointer moved, and Open Palm, Victory, I-love-you and Closed Fist recognized from the left hand.
+1. Pull `main`, run `python3.12 launch.py`, and leave keyboard mode off. If **CAMERA ACCESS BLOCKED** appears, quit the game and enable Camera access for the listed Terminal, Python or Godot app in macOS System Settings → Privacy & Security → Camera, then relaunch. On the welcome screen, complete every **CAMERA REHEARSAL** check: both hands continuously seen for two seconds, right pointer moved, and Open Palm, Victory, I-love-you and Closed Fist recognized from the left hand.
 2. Start a two-module round. Use the right hand to point at a wire. Use the left Closed Fist to ask whether it is blue, release, then Victory to confirm. Hear the named answer and see it in the memory feed.
 3. Queue a cut with left I-love-you. Keep pointing; wait briefly for the model's speak/quiet decision. Confirm with left Victory. Verify the game result and the narrator's response. Complete a Link Recovery contact with right pointer plus left Open Palm.
 4. Repeat the check with a second person. Record each miss in the table. Do not count keyboard fallback as a camera pass.

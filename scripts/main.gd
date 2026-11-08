@@ -108,6 +108,10 @@ func _process(delta: float) -> void:
         Bridge.gesture, "ready" if Bridge.right_detected and Bridge.cursor_visible and Bridge.pointer_confidence >= 0.65 else "missing/uncertain"]
     if not Bridge.pending.is_empty():
         s += "   |   pending: %s" % Bridge.pending.kind
+    if not Bridge.camera_error.is_empty():
+        s += "\nCAMERA ACCESS BLOCKED"
+    elif not Bridge.camera_notice.is_empty():
+        s += "\nCAMERA WAITING FOR PERMISSION"
     _status_label.text = s
     _update_rehearsal(delta)
 
@@ -145,6 +149,12 @@ func _show_welcome() -> void:
 
 func _update_rehearsal(delta: float) -> void:
     if not is_instance_valid(_rehearsal_label):
+        return
+    if not Bridge.camera_error.is_empty():
+        _rehearsal_label.text = Bridge.camera_error
+        return
+    if not Bridge.camera_notice.is_empty():
+        _rehearsal_label.text = Bridge.camera_notice
         return
     var both_ready: bool = Bridge.using_camera() and Bridge.left_detected and Bridge.right_detected \
         and Bridge.cursor_visible and Bridge.pointer_confidence >= 0.65

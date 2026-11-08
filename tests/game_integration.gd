@@ -140,5 +140,14 @@ func run() -> void:
     check(bomb.over, "Third mistake must end round")
     check(events[-1].kind == "game_ended" and not events[-1].context.defused, "Loss must reach narrator")
     check(not bridge.enabled, "Input must stop at round end")
+    bridge._ingest_camera_packet({"camera_notice": "Waiting for Camera permission"})
+    check(bridge.camera_notice.contains("Waiting"),
+        "Pending macOS permission must be visible while the bridge retries")
+    bridge._ingest_camera_packet({"camera_error": "Camera permission denied in this test"})
+    check(bridge.camera_error.contains("permission denied"),
+        "Camera startup failures must reach the in-game status panel")
+    check(bridge.camera_notice.is_empty(), "A final camera error must replace the waiting message")
+    bridge._ingest_camera_packet({"hands": 0, "has_cursor": false})
+    check(bridge.camera_error.is_empty(), "A working camera packet must clear an old startup error")
     print("Godot integration checks: ", "PASS" if failures == 0 else str(failures) + " failures")
     get_tree().quit(0 if failures == 0 else 1)
