@@ -68,6 +68,10 @@ func run() -> void:
     bridge.pointer_confidence = 0.99
     bridge._fire("ILoveYou")
     check(not bridge.pending.is_empty(), "Stable hands must arm a cut")
+    bridge.pending.time = bridge._now() - 0.8
+    bridge._maybe_send_pending_cue()
+    check(events[-1].kind == "pending_action" and narrator._pending_is_current(str(events[-1].context.pending_id)),
+        "Pending cut must reach narrator before confirmation")
     var viewport_size: Vector2 = get_viewport().get_visible_rect().size
     var center: Vector2 = target.get_global_rect().get_center()
     var released_command := {"has_cursor": true, "x": center.x / viewport_size.x,
@@ -95,11 +99,14 @@ func run() -> void:
     bridge._ingest_camera_packet(command_packet)
     bridge._fire(bridge.gesture)
     check(not bridge.pending.is_empty(), "Left-hand packet must queue the cut")
+    var queued_id: String = str(bridge.pending.id)
     bridge._ingest_camera_packet(released_command)
     command_packet["gesture"] = "Victory"
     bridge._ingest_camera_packet(command_packet)
     bridge._fire(bridge.gesture)
     check(wires.solved, "Confirmed correct wire must solve module")
+    check(not narrator._pending_is_current(queued_id),
+        "Confirmed action must invalidate its earlier pre-confirmation cue")
     check(events[-1].kind == "result" and events[-1].result == "correct", "Actual wire result must reach narrator")
     check(events[-1].action.begins_with("cut wire") and events[-1].context.module_solved,
         "Narrator must receive the actual command and solved state")

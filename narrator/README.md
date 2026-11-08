@@ -21,13 +21,13 @@ context["seconds_left"] = 84
 NarratorClient.send_result("WIRES", false, "cut wire 2", context)
 ```
 
-For another module, change the `game` name and action. You can send other live events through `post_event`, for example `kind: "focus"` or `"inspection_request"`. `end_round` sends a game-end event and stops heartbeats. Use a new `round_id` each round. The `context` dictionary should contain **observed game facts**, such as module name, hovered part, time and lives. Root [`scripts/bomb.gd`](../scripts/bomb.gd) supplies these facts during play.
+For another module, change the `game` name and action. You can send other live events through `post_event`, including `focus`, `inspection_result`, and `pending_action`. A pending action includes `target`, `command_count`, and a unique `pending_id` before the player confirms. The Godot client discards the response if that ID is no longer current. `end_round` sends a game-end event and stops heartbeats. Use a new `round_id` each round. The `context` dictionary should contain **observed game facts**, such as module name, hovered part, time and lives. Root [`scripts/bomb.gd`](../scripts/bomb.gd) supplies these facts during play.
 
 ### Live pacing, uncertainty, and memory
 
-After `begin_round`, the Godot client sends a `state` heartbeat about once per second. It includes elapsed and idle time, both hands' tracking context, and recent game facts supplied through `update_round_state`. The server handles routine state updates without an LLM call. When the timer crosses 60, 30, or 10 seconds, when the player reaches the last life, or when camera tracking is uncertain, the server writes a short line directly from current verified state. When the right hand is visible and the player has been idle at least 12 seconds, the LLM may offer a pacing prompt. Pacing and uncertainty have cooldowns. Wrong and module-completion results speak; rapid intermediate correct stages can stay quiet because the game acknowledges them immediately. A closed round suppresses later events.
+After `begin_round`, the Godot client sends a `state` heartbeat about once per second. It includes elapsed and idle time, both hands' tracking context, and recent game facts supplied through `update_round_state`. The server handles routine state updates without an LLM call. Inspection results are spoken from the game's named target, query and answer. A queued press is sent to the model after a short pause so it can choose whether a remembered observation merits a pre-confirmation cue. When the timer crosses 60, 30, or 10 seconds, when the player reaches the last life, or when camera tracking is uncertain, the server writes a short line directly from current verified state. When the right hand is visible and the player has been idle at least 12 seconds, the LLM may offer a pacing prompt. Pacing and uncertainty have cooldowns. Wrong and module-completion results speak; rapid intermediate correct stages can stay quiet because the game acknowledges them immediately. A closed round suppresses later events.
 
-The agent remembers visited games, inspected targets, recent events and spoken lines, plus its wrong-answer streak and total mistakes. The LLM sees sanitized observations to avoid repetition and adapt its tone. Numeric timer and life counts are kept out of its prompt; the server adds those only from current game state. `begin_round` resets memory. The response has `trigger`, `observed_kind`, a short `reason`, and `policy_guarded` or `fallback` when applicable for the live feed.
+The agent remembers visited games, inspected targets, recent events and spoken lines, plus its wrong-answer streak and total mistakes. The LLM sees sanitized observations to avoid repetition and adapt its tone. Numeric timer and life counts are kept out of its prompt; the server adds those only from current game state. `begin_round` resets memory. The response has `trigger`, `observed_kind`, `evidence`, `decision_source`, a short `reason`, and `policy_guarded` or `fallback` when applicable for the live feed.
 
 ### Event contract
 
@@ -59,11 +59,13 @@ The agent remembers visited games, inspected targets, recent events and spoken l
   "session_id": "round-001",
   "game": "wires",
   "trigger": "result",
-  "observed_kind": "result"
+  "observed_kind": "result",
+  "decision_source": "model",
+  "evidence": ["wire 2: blue = No"]
 }
 ```
 
-The LLM sees the current event, recent events, previous lines, and round memory, with numeric counters removed. It writes short commentary for observations that merit speech. The server adds the verified correct/wrong prefix itself. Timer, life, uncertainty, start, and end lines are guarded and composed from verified state. Duplicate event IDs are ignored. The `reason` field is for the live feed; it is not spoken.
+The LLM sees the current event, recent events, previous lines, and round memory, with numeric counters removed. It writes short commentary for observations that merit speech. The server adds the verified correct/wrong prefix itself. Inspections, timer, life, uncertainty, start, and end lines are guarded and composed from verified state. Duplicate event IDs are ignored. `decision_source` identifies model, guard, rule or fallback; `evidence` lists recent observed facts from the current module. The `reason` field is for the live feed; it is not spoken.
 
 Focus lines are discarded by the Godot client if the pointer has moved to another target while Qwen and speech were running. Model lines can occasionally be rejected as `FALLBACK` if they ask a question or make an unsupported claim about the clock, lives, tracking, or an unfinished module. This keeps the live feed honest about what the model actually wrote.
 

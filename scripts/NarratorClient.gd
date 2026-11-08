@@ -32,7 +32,7 @@ var _tracking_source: Node
 
 func _ready() -> void:
 	_http = HTTPRequest.new()
-	_http.timeout = 12.0
+	_http.timeout = 15.0
 	add_child(_http)
 	_http.request_completed.connect(_on_request_completed)
 	_player = AudioStreamPlayer.new()
@@ -151,15 +151,15 @@ func post_event(event: Dictionary) -> void:
 			observed_context.merge(_tracking_source.tracking_context(), true)
 		observed_context.merge(payload.get("context", {}), true)
 		payload["context"] = observed_context
-	if kind in ["result", "action", "inspection_request", "inspection_result"]:
+	if kind in ["result", "action", "pending_action", "inspection_request", "inspection_result"]:
 		_last_action_ms = Time.get_ticks_msec()
 	if kind == "state":
 		for i in range(_queue.size() - 1, -1, -1):
 			if _queue[i].get("kind") == "state":
 				_queue.remove_at(i)
-	elif kind in ["result", "uncertainty", "game_ended"]:
+	elif kind in ["result", "uncertainty", "game_ended", "pending_action"]:
 		for i in range(_queue.size() - 1, -1, -1):
-			if _queue[i].get("kind") == "state":
+			if _queue[i].get("kind") == "state" or (kind == "pending_action" and _queue[i].get("kind") in ["focus", "pending_action"]):
 				_queue.remove_at(i)
 	event_observed.emit(payload.duplicate(true))
 	payload["session_id"] = session_id
@@ -181,6 +181,9 @@ func _send_next() -> void:
 		return
 	var payload: Dictionary = _queue.pop_front()
 	if Time.get_ticks_msec() - int(payload.get("queued_at_ms", 0)) > 12000:
+		narration_skipped.emit({"trigger": payload.get("kind", "event"),
+			"decision_source": "expired", "reason": "Queued event expired before API processing",
+			"round_trip_ms": Time.get_ticks_msec() - int(payload.get("queued_at_ms", 0))})
 		_send_next()
 		return
 	payload.erase("queued_at_ms")
@@ -220,6 +223,13 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 	if parsed.get("trigger") == "focus" and not _focus_is_current(
 			str(parsed.get("observed_target", "")), str(parsed.get("game", ""))):
 		parsed["reason"] = "Player moved off the observed target before narration returned"
+		parsed["decision_source"] = "stale"
+		narration_skipped.emit(parsed)
+		_send_next()
+		return
+	if parsed.get("trigger") == "pending_action" and not _pending_is_current(str(parsed.get("observed_pending_id", ""))):
+		parsed["reason"] = "Queued action changed or was confirmed before narration returned"
+		parsed["decision_source"] = "stale"
 		narration_skipped.emit(parsed)
 		_send_next()
 		return
@@ -251,3 +261,7 @@ func _focus_is_current(target_name: String, game_name: String) -> bool:
 	var module = current.get_meta("module", null)
 	var current_game: String = module.title() if module is BombModule else "bomb"
 	return current_game == game_name
+
+
+func _pending_is_current(pending_id: String) -> bool:
+	return not pending_id.is_empty() and not Bridge.pending.is_empty() and str(Bridge.pending.get("id", "")) == pending_id

@@ -22,7 +22,7 @@ The launcher checks Godot, the camera environment, the local model and the voice
 
 The camera bridge starts from `.venv` automatically. On first launch it downloads the gesture model. It tries camera indices 0–2 and skips black feeds. You can force a device by starting `.venv/bin/python gesture_bridge.py --no-preview --camera-index 1` first. The game uses the existing bridge. Camera preview appears on the welcome screen before the timer starts.
 
-The status panel separately shows whether the left command hand and right pointer hand are detected. "Left: seen / None" means the hand is visible but its current pose is not a recognized command. Keep both hands apart, fully in frame and well lit. The camera image is mirrored **only for display**; MediaPipe receives the original image so it assigns the correct hand roles. If a camera driver already supplies mirrored frames and the roles still appear reversed, start with `WHACK_SWAP_HANDS=1 python3.12 launch.py` (or pass `--swap-hands` to `gesture_bridge.py`).
+The status panel separately shows whether the left command hand and right pointer hand are detected. "Left: seen / None" means the hand is visible but its current pose is not a recognized command. Keep both hands apart, fully in frame and well lit. The welcome screen has a camera rehearsal: hold both hands in view, move the right pointer, and show Open Palm, Victory, I-love-you, and Closed Fist with the left. It records which checks passed; a full human round is still needed. The camera image is mirrored **only for display**; MediaPipe receives the original image so it assigns the correct hand roles. If a camera driver already supplies mirrored frames and the roles still appear reversed, start with `WHACK_SWAP_HANDS=1 python3.12 launch.py` (or pass `--swap-hands` to `gesture_bridge.py`).
 
 ## Play
 
@@ -30,7 +30,7 @@ Print [revision 7 of the field guide](docs/PLAYER_MANUAL_print.html), or read it
 
 Right index finger points. Left hand gestures query colour, read text, queue a press, or confirm. Hold a gesture for about 0.35 seconds. Release between repeated presses. The right pointer must stay visible and stable until confirmation. An uncertain left gesture is ignored; losing the right pointer cancels pending commands. Press K to use the mouse and keys 1–7 even if a camera is connected. R restarts.
 
-The live feed shows observed events, decisions and response time. `GUARD` marks lines composed from verified state for timer, life, tracking and round boundaries; `AGENT` marks model-written commentary; `FALLBACK` marks a model failure. The narrator receives the active module, observed target, question/result, round timer, lives and tracking state. It can react to focus, hesitation, uncertain tracking, mistakes and warnings. The game remains authoritative over correct and wrong outcomes.
+The live feed shows observed events, remembered inspection facts, speak/quiet decisions, reasons and response time. `GUARD` marks lines composed from verified state for inspections, timer, life, tracking and round boundaries; `MODEL` marks model-written commentary; `FALLBACK` marks a model failure. The narrator receives the active module, observed target, queued press before confirmation, question/result, round timer, lives and tracking state. It can react to focus, hesitation, pending choices, uncertain tracking, mistakes and warnings. Inspection facts are spoken with their target names. The game remains authoritative over correct and wrong outcomes; a pending cue is discarded if the player confirms or moves away first.
 
 See [the judge demo guide](docs/DEMO.md) for a short presentation sequence and honest account of how the camera and narrator communicate.
 
@@ -41,6 +41,7 @@ python3.12 narrator/test_agent.py
 python3.12 -m unittest discover -s tests -p 'test_*.py'
 /Applications/Godot.app/Contents/MacOS/Godot --headless --path . tests/game_integration.tscn
 /Applications/Godot.app/Contents/MacOS/Godot --headless --path . tests/narrator_live.tscn
+/Applications/Godot.app/Contents/MacOS/Godot --headless --path . tests/preconfirm_live.tscn
 ```
 
-The last check requires the local narrator API, Qwen and ElevenLabs key. Replace the macOS Godot path on other systems. The first two checks cover agent state and real game actions; the last verifies a model-generated caption and decoded Liam MP3 in Godot. It disables speaker playback during automated testing; listen to the voice in the running game before presenting. Run `python3.12 tools/build_manual.py` after changing the Markdown field guide, then commit the updated printable HTML.
+The two live checks require the local narrator API, Qwen and ElevenLabs key. Replace the macOS Godot path on other systems. The first checks cover agent state and real game actions; the live checks verify a result and a pre-confirmation decision with decoded Liam MP3 in Godot. They disable speaker playback during automated testing; listen to the voice in the running game before presenting. Run `python3.12 tools/build_manual.py` after changing the Markdown field guide, then commit the updated printable HTML.

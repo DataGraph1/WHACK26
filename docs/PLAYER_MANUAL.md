@@ -20,7 +20,7 @@ Right index finger: move the cursor. Keep this hand visible while issuing a comm
 | Victory / two fingers | 6 | Confirm the pending command |
 | I-love-you sign | 7 | Queue a cut or button press |
 
-Keep pointing at the same target, then confirm within three seconds. For multiple presses, repeat the press gesture the required number of times before confirming once. Each press refreshes the confirmation window. Moving to another target cancels confirmation. Losing the right pointer cancels pending commands; an uncertain left-hand gesture is ignored while you release your hand between commands. Press K to toggle mouse and keyboard controls even while the camera is connected. With no camera connection, mouse and keyboard provide the same controls automatically.
+Keep pointing at the same target, then confirm within ten seconds. The narrator may comment while a press is queued; you may wait for the cue or confirm immediately. For multiple presses, repeat the press gesture the required number of times before confirming once. Each press refreshes the confirmation window. Moving to another target cancels confirmation. Losing the right pointer cancels pending commands; an uncertain left-hand gesture is ignored while you release your hand between commands. Press K to toggle mouse and keyboard controls even while the camera is connected. With no camera connection, mouse and keyboard provide the same controls automatically.
 
 The robot's response to a colour query is Yes or No. Read the serial number and indicator labels with an open palm. Count the visible battery blocks. A vowel means A, E, I, O or U. Wire and button positions in this guide start at 1.
 

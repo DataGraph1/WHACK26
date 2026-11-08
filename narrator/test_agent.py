@@ -151,6 +151,29 @@ class NarratorStateTest(unittest.TestCase):
         self.send("inspection_result", {"target": "wire 2", "query": "blue", "observation": "No"})
         self.assertEqual(self.agent.sessions["round-1"].inspected_targets[-1]["observation"], "No")
 
+    def test_inspection_speaks_named_game_fact(self):
+        reply = self.send("inspection_result", {"target": "wire 2", "query": "blue", "observation": "No"})
+        self.assertTrue(reply["say"])
+        self.assertEqual(reply["text"], "No, wire 2 is not blue.")
+        self.assertEqual(reply["decision_source"], "guard")
+        self.assertIn("wire 2: blue = No", reply["evidence"])
+
+    def test_pending_action_can_use_memory_before_confirmation(self):
+        self.send("inspection_result", {"target": "wire 2", "query": "blue", "observation": "No"})
+        reply = self.send("pending_action", {"target": "wire 2", "pending_id": "p1"},
+                          game="wires", action="cut wire 2")
+        self.assertEqual(reply["decision_source"], "model")
+        self.assertEqual(reply["observed_pending_id"], "p1")
+        self.assertIn("wire 2: blue = No", reply["evidence"])
+
+    def test_pending_action_quiets_if_model_unavailable(self):
+        def unavailable(*args):
+            raise NarratorUnavailable("test outage")
+        self.agent._ask_llm = unavailable
+        reply = self.send("pending_action", {"target": "wire 2", "pending_id": "p2"})
+        self.assertFalse(reply["say"])
+        self.assertEqual(reply["decision_source"], "fallback")
+
     def test_model_question_is_replaced_with_safe_line(self):
         self.agent._ask_llm = lambda *args: {
             "say": True, "text": "What is this round about?", "mood": "cheerful",
@@ -176,6 +199,17 @@ class NarratorStateTest(unittest.TestCase):
         self.assertTrue(result["fallback"])
         self.assertNotIn("Time's up", result["text"])
         self.assertNotIn("One life", result["text"])
+
+    def test_result_does_not_repeat_preconfirmation_cue(self):
+        self.agent._ask_llm = lambda *args: {
+            "say": True, "text": "Inspect wire 2 again before confirming.",
+            "mood": "concerned", "reason": "Repeated cue",
+        }
+        self.send("pending_action", {"target": "wire 2", "pending_id": "one"}, game="WIRES")
+        result = self.send("result", {"target": "wire 2", "target_reusable": False},
+                           result="wrong", game="WIRES")
+        self.assertTrue(result["fallback"])
+        self.assertIn("remaining targets", result["text"])
 
     def test_wrong_result_does_not_send_player_away_from_active_module(self):
         self.agent._ask_llm = lambda *args: {

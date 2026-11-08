@@ -29,7 +29,7 @@ signal camera_frame_changed(texture: Texture2D)
 
 const PORT := 4242
 const HOLD_TIME := 0.35        # a gesture must be held this long to register
-const CONFIRM_WINDOW := 3.0    # seconds to confirm before the command is cancelled
+const CONFIRM_WINDOW := 10.0   # allows a live pre-confirmation cue before Victory
 const UDP_TIMEOUT := 1.0       # no packets for this long -> keyboard/mouse fallback
 const CAMERA_START_DELAY := 1.25
 
@@ -159,6 +159,8 @@ func _process(_delta: float) -> void:
         _fired = true
         _fire(gesture)
 
+    _maybe_send_pending_cue()
+
     if not pending.is_empty() and _now() - pending.time > CONFIRM_WINDOW:
         pending = {}
         bot_said.emit("Cancelled.")
@@ -215,6 +217,8 @@ func _set_gesture(g: String) -> void:
 
 
 func _fire(g: String) -> void:
+    if not enabled:
+        return
     if using_camera() and (not left_detected or not right_detected or not cursor_visible
             or pointer_confidence < 0.65 or gesture_confidence < 0.65):
         return
@@ -273,11 +277,32 @@ func _queue_press() -> void:
         pending = {}
         bot_said.emit("That only takes one press. Cancelled.")
         return
-    pending = {"kind": "press", "value": "", "count": count, "target": t, "time": _now()}
+    var pending_id := str(Time.get_ticks_usec())
+    pending = {"kind": "press", "value": "", "count": count, "target": t,
+        "time": _now(), "id": pending_id, "cue_sent": false}
     if multi:
         bot_said.emit("Presses queued: %d" % count)
     else:
         bot_said.emit("%s %s?" % [t.get_meta("verb", "Press"), t.get_meta("desc")])
+
+
+func _maybe_send_pending_cue() -> void:
+    if pending.is_empty() or pending.get("kind") != "press" or pending.get("cue_sent", false):
+        return
+    if _now() - float(pending.time) < 0.7:
+        return
+    var t: Control = pending.target
+    if not is_instance_valid(t):
+        pending = {}
+        return
+    pending["cue_sent"] = true
+    var module = t.get_meta("module")
+    if module is BombModule:
+        NarratorClient.post_event({"game": module.title(), "kind": "pending_action",
+            "action": str(t.get_meta("verb", "Press")).to_lower() + " " + str(t.get_meta("desc")),
+            "context": {"target": str(t.get_meta("desc")), "command_count": int(pending.count),
+                "pending_id": str(pending.id), "seconds_left": module.bomb.time_left,
+                "lives": maxi(0, 3 - module.bomb.strikes)}})
 
 
 func _confirm() -> void:
