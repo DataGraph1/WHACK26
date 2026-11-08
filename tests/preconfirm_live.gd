@@ -37,6 +37,12 @@ func _on_narration(text: String, audio: AudioStreamMP3, decision: Dictionary) ->
             Bridge.camera_connected = false
             Bridge.keyboard_mode = false
             Bridge.cursor = target.get_global_rect().get_center()
+            Bridge._set_gesture("Closed_Fist")
+            Bridge._fire("Closed_Fist")
+        "target_locked":
+            Bridge.cursor = target.get_global_rect().get_center()
+            Bridge._set_gesture("None")
+            Bridge._set_gesture("Closed_Fist")
             Bridge._fire("Closed_Fist")
             Bridge._fire("Victory")
         "inspection_result":
@@ -50,7 +56,9 @@ func _on_narration(text: String, audio: AudioStreamMP3, decision: Dictionary) ->
             pending_decided = decision.get("decision_source") == "model" \
                 and str(decision.get("observed_pending_id", "")) == str(Bridge.pending.get("id", "")) \
                 and not decision.get("evidence", []).is_empty()
-            pending_source = "SPEAK: " + text if audio != null else "SPEAK: caption only"
+            pending_source = ("SPEAK: " + text if audio != null else "SPEAK: caption only") + \
+                " / source=" + str(decision.get("decision_source", "")) + \
+                " / fallback=" + str(decision.get("fallback_reason", ""))
             pending_round_trip_ms = int(decision.get("round_trip_ms", -1))
             Bridge.cursor = target.get_global_rect().get_center()
             Bridge._fire("Victory")

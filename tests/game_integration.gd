@@ -70,6 +70,8 @@ func run() -> void:
     bridge._fire("Closed_Fist")
     check(bridge.selected_target == target and bridge.pending.is_empty(),
         "First fist must lock the hovered wire without queuing an action")
+    check(events[-1].kind == "target_locked" and events[-1].context.target_id == target.get_instance_id(),
+        "Target lock must reach the live narrator with an exact target identity")
     bridge._arm("read", "")
     var other_index: int = (wires.correct + 1) % wires.wire_hits.size()
     bridge.cursor = wires.wire_hits[other_index].get_global_rect().get_center()
@@ -174,12 +176,16 @@ func run() -> void:
     check(link.charge > 0, "Stable pointer and open palm must charge link")
     bridge.gesture = "None"
     link._process(0.1)
-    check(link.charge == 0, "Interrupted hold must reset charge")
+    check(link.charge > 0, "A brief tracking gap must preserve Link Recovery charge")
+    link._process(0.36)
+    check(link.charge == 0, "A sustained interruption must reset Link Recovery charge")
     check(bomb.strikes == 0, "Interrupted link must not consume life")
     bridge.gesture = "Open_Palm"
     for i in 3:
         bridge.cursor = link.pad.get_global_rect().get_center()
         link._process(1.6)
+        if i == 0:
+            check(events[-1].kind == "link_contact", "Restored relay contact must reach the live narrator")
     check(link.solved, "Three stable contacts must restore link")
     check(events[-1].kind == "result", "Link restoration must reach agent")
     bridge.cursor = bomb.modules[0].get_global_rect().position - Vector2(10, 10)
@@ -199,5 +205,10 @@ func run() -> void:
     check(bridge.camera_notice.is_empty(), "A final camera error must replace the waiting message")
     bridge._ingest_camera_packet({"hands": 0, "has_cursor": false})
     check(bridge.camera_error.is_empty(), "A working camera packet must clear an old startup error")
+    var full_round := Bomb.new()
+    full_round.module_count = 4
+    get_tree().root.add_child(full_round)
+    check(full_round.time_left == 480.0, "Four-module round must start at eight minutes")
+    full_round.queue_free()
     print("Godot integration checks: ", "PASS" if failures == 0 else str(failures) + " failures")
     get_tree().quit(0 if failures == 0 else 1)

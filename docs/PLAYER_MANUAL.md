@@ -1,10 +1,10 @@
-# Bot Defusal — field guide, revision 8
+# Bot Defusal — field guide, revision 9
 
 You are operating a remote robot through a damaged video link. Colours and lettering are obscured. Point at a component and ask the robot to inspect it; use the facts it reports to apply this guide. The narrator knows your observations and progress, but does not receive the solution.
 
 ## Mission
 
-Disarm every displayed module within three minutes. A third mistake ends the round. Mistakes do not accelerate the clock. Press R to begin a new random round. All rules below are checked from top to bottom: use the first matching rule.
+Disarm a two-module round within three minutes or a four-module round within eight minutes. A third mistake ends the round. Mistakes do not accelerate the clock. Press R to begin a new random round. All rules below are checked from top to bottom: use the first matching rule.
 
 ## Controls
 
@@ -20,13 +20,13 @@ Right index finger: move the cursor. The central part of the camera view now rea
 | Victory / two fingers | 6 | Confirm the pending command |
 | I-love-you sign | 7 | Queue a cut or button press |
 
-With a target locked, inspection and press commands use that target even if the pointer moves or leaves view. Victory confirms the pending command within ten seconds; the orange outline shows what is pending. The narrator may comment while a press is queued; you may wait for the cue or confirm immediately. For multiple presses, repeat the press gesture the required number of times before confirming once. Each press refreshes the confirmation window. Fisting on a different target changes the lock and cancels any pending command. Without a lock, keep pointing at the same target until confirmation; moving away or losing the right pointer cancels the command. An uncertain left-hand gesture is ignored while you release your hand between commands. Press K to toggle mouse and keyboard controls even while the camera is connected; switching modes clears the lock. With no camera connection, mouse and keyboard provide the same controls automatically.
+With a target locked, inspection and press commands use that target even if the pointer moves or leaves view. Victory confirms the pending command within ten seconds; the orange outline shows what is pending. The narrator may comment while a press is queued; you may wait for the cue or confirm immediately. For multiple presses, repeat the press gesture the required number of times before confirming once. Each press refreshes the confirmation window. Fisting on a different target changes the lock and cancels any pending command. Without a lock, keep pointing at the same target until confirmation; moving away or losing the right pointer cancels the command. An uncertain left-hand gesture is ignored while you release your hand between commands. Press K to toggle mouse and keyboard controls even while the camera is connected; switching modes clears the lock. Press P to enlarge or restore the camera preview. With no camera connection, mouse and keyboard provide the same controls automatically.
 
 The robot's response to a colour query is Yes or No. Read the serial number and indicator labels with an open palm. Count the visible battery blocks. A vowel means A, E, I, O or U. Wire and button positions in this guide start at 1.
 
 ## Link Recovery
 
-Every round includes this robot-specific module. Its HOLD pad is a continuous control: keep the right pointer inside it and show an open left palm for 1.5 seconds. The fist lock does not hold this pad for you. With keyboard controls, keep the mouse on the pad and hold 2. No confirmation gesture is needed here. The pad moves after each completed contact; restore three contacts to disarm the module. Leaving the pad or losing reliable tracking resets only the current contact's charge, without a strike. The agent observes stabilization and interrupted contact events.
+Every round includes this robot-specific module. Its HOLD pad is a continuous control: keep the right pointer inside it and show an open left palm for 1.5 seconds of tracked contact. The fist lock does not hold this pad for you. A short tracking flicker pauses charge; a loss lasting about 0.35 seconds resets only the current contact's charge. The pointer has a small edge tolerance around the pad. With keyboard controls, keep the mouse on the pad and hold 2. No confirmation gesture is needed here. The pad moves after each completed contact; restore three contacts to disarm the module. An interrupted contact does not cost a life. The agent observes restored and interrupted contacts.
 
 The start screen offers two or four modules. The two-module demo always has Link Recovery and Wires. The four-module round includes Link Recovery and three randomly selected modules from the four types below.
 

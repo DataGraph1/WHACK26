@@ -1,7 +1,7 @@
 """Assign MediaPipe's unmirrored hand results to game controls."""
 
-MARGIN = 0.22  # The central 56% of camera travel reaches the whole screen.
-SMOOTH = 0.45
+MARGIN = 0.26  # The central 48% of camera travel reaches the whole screen.
+SMOOTH = 0.50
 
 
 def extract_hand_packet(result, cursor=(0.5, 0.5), swap_hands=False):

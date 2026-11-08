@@ -59,7 +59,7 @@ class HandRoleTest(unittest.TestCase):
         self.assertTrue(packet["has_cursor"])
 
     def test_middle_camera_range_reaches_board_edges_with_less_arm_travel(self):
-        for raw_x, start_x, upper_bound in ((0.78, 1.0, 0.60), (0.22, 0.0, 0.60)):
+        for raw_x, start_x, upper_bound in ((0.74, 1.0, 0.55), (0.26, 0.0, 0.55)):
             result = Item(handedness=[[category("Right")]], gestures=[[]],
                           hand_landmarks=[landmarks(raw_x, 0.5)])
             x = extract_hand_packet(result, cursor=(start_x, 0.5))["x"]

@@ -21,7 +21,9 @@ func _start_round(count: int = 4) -> void:
 
 var _bot_label: Label
 var _status_label: Label
+var _narrator_status_label: Label
 var _camera_preview: TextureRect
+var _preview_expanded := false
 
 
 func _ready() -> void:
@@ -34,28 +36,29 @@ func _ready() -> void:
     Bridge.enabled = false
     call_deferred("_show_welcome")
 
-    _make_label("BOT SCREEN", Vector2(880, 150), Vector2(360, 30), 20)
-    _bot_label = _make_label("Waiting for a command...", Vector2(880, 185), Vector2(360, 120), 23)
+    _make_label("BOT SCREEN", Vector2(880, 200), Vector2(360, 30), 20)
+    _bot_label = _make_label("Waiting for a command...", Vector2(880, 235), Vector2(360, 90), 21)
     _bot_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     _status_label = _make_label("", Vector2(880, 640), Vector2(380, 60), 14)
+    _narrator_status_label = _make_label("Agent: connecting...", Vector2(880, 365), Vector2(380, 24), 12)
     _camera_preview = TextureRect.new()
-    _camera_preview.position = Vector2(995, 10)
-    _camera_preview.size = Vector2(240, 135)
+    _camera_preview.position = Vector2(900, 10)
+    _camera_preview.size = Vector2(320, 180)
     _camera_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
     _camera_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
     add_child(_camera_preview)
     Bridge.camera_frame_changed.connect(func(texture: Texture2D) -> void: _camera_preview.texture = texture)
     var help := _make_label(
-        "Keys: 1 lock / 1 again blue / 2 read / 3 yellow / 4 red / 5 green\n6 confirm / 7 cut or press (release between presses)\nK hand or keyboard / R restart / F11 fullscreen",
+        "Keys: 1 lock / 1 again blue / 2 read / 3 yellow / 4 red / 5 green\n6 confirm / 7 cut or press (release between presses)\nK keyboard / P camera zoom / R restart / F11 fullscreen",
         Vector2(880, 565), Vector2(380, 80), 12)
     help.modulate = Color(1, 1, 1, 0.6)
 
     add_child(preload("res://scripts/cursor.gd").new())
     NarratorClient.narration_ready.connect(_on_narration_ready)
     NarratorClient.narrator_error.connect(_on_narrator_error)
-    _feed = _make_label("Live observer ready", Vector2(880, 390), Vector2(360, 165), 12)
+    _feed = _make_label("Checking live observer...", Vector2(880, 390), Vector2(360, 165), 12)
     _feed.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    _command_label = _make_label("Point, inspect, confirm.", Vector2(880, 320), Vector2(360, 65), 17)
+    _command_label = _make_label("Point, inspect, confirm.", Vector2(880, 330), Vector2(360, 55), 17)
     _command_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     Bridge.bot_said.connect(func(t: String) -> void: _command_label.text = t)
     NarratorClient.event_observed.connect(_on_event_observed)
@@ -69,6 +72,8 @@ func _on_narration_ready(text: String, audio: AudioStreamMP3, decision: Dictiona
     _log("%s [%s] %d ms · %s" % ["SPEAK" if audio != null else "CAPTION",
         str(decision.get("decision_source", "model")).to_upper(),
         int(decision.get("round_trip_ms", 0)), explanation])
+    if audio == null and decision.has("audio_error"):
+        _log("VOICE OFF · " + str(decision.audio_error))
 
 
 func _on_narrator_error(message: String) -> void:
@@ -103,6 +108,9 @@ func _make_label(text: String, pos: Vector2, sz: Vector2, font_size: int) -> Lab
 
 
 func _process(delta: float) -> void:
+    _narrator_status_label.text = ("Agent: on | Qwen: %s | Liam key: %s" % [
+        "ready" if NarratorClient.is_model_ready() else "missing",
+        "yes" if NarratorClient.is_voice_key_present() else "no"]) if NarratorClient.is_api_ready() else "Agent: connecting or offline"
     var camera_status := "connected (%d)" % Bridge.camera_index if Bridge.camera_connected else "off"
     var s := "Control: %s | Cam: %s | Hands: %d\nLeft: %s / %s | Right: %s" % [
         "keyboard" if Bridge.keyboard_mode or not Bridge.camera_connected else "hands",
@@ -116,6 +124,8 @@ func _process(delta: float) -> void:
         s += "\nCAMERA ACCESS BLOCKED"
     elif not Bridge.camera_notice.is_empty():
         s += "\nCAMERA WAITING FOR PERMISSION"
+    elif not Bridge.camera_preview_error.is_empty():
+        s += "\n" + Bridge.camera_preview_error
     _status_label.text = s
     _update_rehearsal(delta)
 
@@ -129,6 +139,12 @@ func _unhandled_input(event: InputEvent) -> void:
     elif k.keycode == KEY_F11:
         var window := get_window()
         window.mode = Window.MODE_WINDOWED if window.mode == Window.MODE_FULLSCREEN else Window.MODE_FULLSCREEN
+    elif k.keycode == KEY_P:
+        _preview_expanded = not _preview_expanded
+        _camera_preview.position = Vector2(40, 155) if _preview_expanded else Vector2(900, 10)
+        _camera_preview.size = Vector2(800, 450) if _preview_expanded else Vector2(320, 180)
+        if _preview_expanded:
+            move_child(_camera_preview, get_child_count() - 1)
 
 
 func _show_welcome() -> void:
@@ -140,7 +156,7 @@ func _show_welcome() -> void:
     title_label.add_theme_font_size_override("font_size", 28)
     _welcome.add_child(title_label)
     var guide := Label.new()
-    guide.text = "Check the camera preview before starting.\nRight index finger moves the pointer; left fist locks a target.\nMove freely after locking; fist on another target changes the lock.\nHold, release, then use Victory to confirm.\nRead the printed revision 8 field guide.\nEvery round: three minutes, three lives. K enables mouse and keys 1–7."
+    guide.text = "Check the camera preview before starting.\nRight index finger moves the pointer; left fist locks a target.\nMove freely after locking; fist on another target changes the lock.\nHold, release, then use Victory to confirm.\nRead the printed revision 9 field guide.\nTwo modules: three minutes. Four modules: eight minutes. Three lives."
     guide.position = Vector2(55, 210)
     guide.add_theme_font_size_override("font_size", 20)
     _welcome.add_child(guide)

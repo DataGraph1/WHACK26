@@ -4,7 +4,8 @@ extends Control
 
 signal finished(won: bool)
 
-const START_TIME := 180.0
+const SHORT_ROUND_TIME := 180.0
+const FOUR_MODULE_TIME := 480.0
 const INDICATOR_POOL := ["FKL", "FRK", "CLR", "SND", "BOB"]
 
 @export var module_count := 4
@@ -15,7 +16,7 @@ var batteries := 0
 var indicators: Array = []
 var has_strike_indicator := true
 var strikes := 0
-var time_left := START_TIME
+var time_left := SHORT_ROUND_TIME
 var modules: Array = []
 var over := false
 
@@ -27,6 +28,7 @@ var _overlay_label: Label
 
 func _ready() -> void:
     set_anchors_preset(Control.PRESET_FULL_RECT)
+    time_left = FOUR_MODULE_TIME if module_count == 4 else SHORT_ROUND_TIME
     Bridge.enabled = true
     Bridge.pending = {}
     Bridge.selected_target = null
@@ -38,7 +40,8 @@ func _ready() -> void:
     for module in modules:
         module_names.append(module.title())
     NarratorClient.begin_round(str(Time.get_ticks_usec()), "bomb", {
-        "lives": 3, "seconds_left": time_left, "modules": module_names,
+        "lives": 3, "seconds_left": time_left, "round_duration_seconds": time_left,
+        "modules": module_names,
         "mission": "Disarm every module using the field guide and both hands",
     })
 
@@ -85,7 +88,7 @@ func _build_ui() -> void:
     bg.set_anchors_preset(Control.PRESET_FULL_RECT)
     add_child(bg)
 
-    _timer_label = _label("03:00", Vector2(40, 10), Vector2(300, 70), 56)
+    _timer_label = _label("08:00" if module_count == 4 else "03:00", Vector2(40, 10), Vector2(300, 70), 56)
     _strike_label = _label("", Vector2(360, 24), Vector2(300, 40), 32)
     _update_strikes()
 
@@ -172,7 +175,7 @@ func _process(delta: float) -> void:
     if over:
         return
     NarratorClient.update_round_state("bomb", {"seconds_left": time_left, "lives": maxi(0, 3 - strikes), "strikes": strikes})
-    time_left -= delta   # fixed three-minute round
+    time_left -= delta
     if time_left <= 0.0:
         time_left = 0.0
         _end(false)

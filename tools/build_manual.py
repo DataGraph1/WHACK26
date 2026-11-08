@@ -63,5 +63,5 @@ th,td { border: 1px solid #a4b6bd; padding: 1.6mm; text-align: left; }
 th { background: #d9eaf0; }
 @media screen { body { padding: 20px; } }
 '''
-target.write_text('<!doctype html><html lang="en"><meta charset="utf-8"><title>Bot Defusal field guide, revision 8</title><style>' + style + '</style><body>' + '\n'.join(parts) + '</body></html>\n', encoding='utf-8')
+target.write_text('<!doctype html><html lang="en"><meta charset="utf-8"><title>Bot Defusal field guide, revision 9</title><style>' + style + '</style><body>' + '\n'.join(parts) + '</body></html>\n', encoding='utf-8')
 print(target)

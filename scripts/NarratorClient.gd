@@ -10,12 +10,23 @@ signal narrator_error(message: String)
 @export var api_url := "http://127.0.0.1:8765/v1/events"
 @export var auto_play_audio := true
 @export var heartbeat_interval_seconds := 1.0
+const EXPECTED_API_VERSION := 3
 
 var session_id := ""
 var _http: HTTPRequest
+var _health_http: HTTPRequest
 var _player: AudioStreamPlayer
 var _queue: Array[Dictionary] = []
 var _busy := false
+var _api_ready := false
+var _voice_key_present := false
+var _model_ready := false
+var _health_busy := false
+var _health_elapsed := 0.0
+var _health_failures := 0
+var _start_attempted := false
+var _owned_api_pid := -1
+var _inflight_payload: Dictionary = {}
 var _inflight_started_ms := 0
 var _sequence := 0
 var _inflight_session_id := ""
@@ -35,11 +46,81 @@ func _ready() -> void:
 	_http.timeout = 70.0
 	add_child(_http)
 	_http.request_completed.connect(_on_request_completed)
+	_health_http = HTTPRequest.new()
+	_health_http.timeout = 1.5
+	add_child(_health_http)
+	_health_http.request_completed.connect(_on_health_completed)
 	_player = AudioStreamPlayer.new()
 	add_child(_player)
+	call_deferred("_check_api_health")
+
+
+func _exit_tree() -> void:
+	if _owned_api_pid > 0:
+		OS.kill(_owned_api_pid)
+
+
+func is_api_ready() -> bool:
+	return _api_ready
+
+
+func is_voice_key_present() -> bool:
+	return _voice_key_present
+
+
+func is_model_ready() -> bool:
+	return _model_ready
+
+
+func _check_api_health() -> void:
+	if _health_busy:
+		return
+	_health_busy = _health_http.request(api_url.replace("/v1/events", "/health")) == OK
+
+
+func _on_health_completed(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	_health_busy = false
+	if result == HTTPRequest.RESULT_SUCCESS and code == 200:
+		var health = JSON.parse_string(body.get_string_from_utf8())
+		if typeof(health) != TYPE_DICTIONARY or int(health.get("api_version", -1)) != EXPECTED_API_VERSION:
+			_api_ready = false
+			_voice_key_present = false
+			_model_ready = false
+			if _health_failures != 5:
+				_health_failures = 5
+				narrator_error.emit("Old narrator service on port 8765. Stop it, then run launch.py.")
+			return
+		_api_ready = true
+		_voice_key_present = bool(health.get("elevenlabs_key_present", false))
+		_model_ready = bool(health.get("text_model_ready", false))
+		_health_failures = 0
+		_send_next()
+		return
+	_health_failures += 1
+	_api_ready = false
+	_voice_key_present = false
+	_model_ready = false
+	if not _start_attempted and DisplayServer.get_name() != "headless" and \
+			(api_url.begins_with("http://127.0.0.1:") or api_url.begins_with("http://localhost:")):
+		_start_attempted = true
+		var project_dir := ProjectSettings.globalize_path("res://")
+		var python_relative := ".venv/Scripts/python.exe" if OS.get_name() == "Windows" else ".venv/bin/python"
+		var python_path := project_dir.path_join(python_relative)
+		var script_path := project_dir.path_join("narrator/agent_api.py")
+		if FileAccess.file_exists(python_path) and FileAccess.file_exists(script_path):
+			_owned_api_pid = OS.create_process(python_path, PackedStringArray([script_path]))
+			narrator_error.emit("Starting local narrator service...")
+		else:
+			narrator_error.emit("Narrator setup missing. Install .venv, then run launch.py.")
+	elif _health_failures == 5:
+		narrator_error.emit("Narrator API unavailable. Start Ollama and run launch.py.")
 
 
 func _process(delta: float) -> void:
+	_health_elapsed += delta
+	if _health_elapsed >= (10.0 if _api_ready else 1.0):
+		_health_elapsed = 0.0
+		_check_api_health()
 	if not _round_active or session_id.is_empty():
 		return
 	_heartbeat_elapsed += delta
@@ -157,9 +238,10 @@ func post_event(event: Dictionary) -> void:
 		for i in range(_queue.size() - 1, -1, -1):
 			if _queue[i].get("kind") == "state":
 				_queue.remove_at(i)
-	elif kind in ["result", "uncertainty", "game_ended", "pending_action"]:
+	elif kind in ["result", "uncertainty", "game_ended", "pending_action", "target_locked", "link_contact"]:
 		for i in range(_queue.size() - 1, -1, -1):
-			if _queue[i].get("kind") == "state" or (kind == "pending_action" and _queue[i].get("kind") in ["focus", "pending_action"]):
+			var queued_kind := str(_queue[i].get("kind", ""))
+			if queued_kind == "state" or (kind in ["result", "pending_action", "target_locked"] and queued_kind in ["focus", "pending_action", "target_locked"]) or (kind == "link_contact" and queued_kind == "link_stabilizing"):
 				_queue.remove_at(i)
 	event_observed.emit(payload.duplicate(true))
 	payload["session_id"] = session_id
@@ -177,7 +259,7 @@ func post_event(event: Dictionary) -> void:
 
 
 func _send_next() -> void:
-	if _busy or _queue.is_empty():
+	if _busy or not _api_ready or _queue.is_empty():
 		return
 	var payload: Dictionary = _queue.pop_front()
 	if Time.get_ticks_msec() - int(payload.get("queued_at_ms", 0)) > 12000:
@@ -187,6 +269,7 @@ func _send_next() -> void:
 		_send_next()
 		return
 	payload.erase("queued_at_ms")
+	_inflight_payload = payload.duplicate(true)
 	_busy = true
 	_inflight_started_ms = Time.get_ticks_msec()
 	_inflight_session_id = str(payload.get("session_id", ""))
@@ -194,9 +277,13 @@ func _send_next() -> void:
 	var error := _http.request(api_url, headers, HTTPClient.METHOD_POST, JSON.stringify(payload))
 	if error != OK:
 		_busy = false
-		_heartbeat_retry_after_ms = Time.get_ticks_msec() + 10000
-		narrator_error.emit("Could not send event to narrator API: " + str(error))
-		_send_next()
+		_api_ready = false
+		_voice_key_present = false
+		_model_ready = false
+		payload["queued_at_ms"] = Time.get_ticks_msec()
+		_queue.push_front(payload)
+		narrator_error.emit("Narrator connection failed; reconnecting (" + str(error) + ")")
+		_check_api_health()
 
 
 func _on_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
@@ -205,9 +292,14 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 		_send_next()
 		return
 	if result != HTTPRequest.RESULT_SUCCESS:
-		_heartbeat_retry_after_ms = Time.get_ticks_msec() + 10000
-		narrator_error.emit("Narrator HTTP request failed: " + str(result))
-		_send_next()
+		_api_ready = false
+		_voice_key_present = false
+		_model_ready = false
+		var retry := _inflight_payload.duplicate(true)
+		retry["queued_at_ms"] = Time.get_ticks_msec()
+		_queue.push_front(retry)
+		narrator_error.emit("Narrator HTTP connection lost; reconnecting (" + str(result) + ")")
+		_check_api_health()
 		return
 	var parsed = JSON.parse_string(body.get_string_from_utf8())
 	if typeof(parsed) != TYPE_DICTIONARY:
@@ -229,6 +321,13 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 		return
 	if parsed.get("trigger") == "pending_action" and not _pending_is_current(str(parsed.get("observed_pending_id", ""))):
 		parsed["reason"] = "Queued action changed or was confirmed before narration returned"
+		parsed["decision_source"] = "stale"
+		narration_skipped.emit(parsed)
+		_send_next()
+		return
+	if parsed.get("trigger") == "target_locked" and (not is_instance_valid(Bridge.selected_target)
+			or Bridge.selected_target.get_instance_id() != int(parsed.get("observed_target_id", 0))):
+		parsed["reason"] = "Target lock changed before narration returned"
 		parsed["decision_source"] = "stale"
 		narration_skipped.emit(parsed)
 		_send_next()

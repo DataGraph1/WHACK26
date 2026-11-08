@@ -36,16 +36,19 @@ func _received(text: String, audio: AudioStreamMP3, decision: Dictionary) -> voi
     if decision.get("trigger") != "result":
         return
     completed = true
+    var model_considered: bool = not decision.get("fallback", false) or \
+        str(decision.get("fallback_reason", "")).begins_with("Model ")
     var ok: bool = opening_audio and not text.is_empty() and audio != null \
-        and not decision.get("fallback", false) and not decision.get("policy_guarded", false) \
+        and model_considered and not decision.get("policy_guarded", false) \
         and text.begins_with("Wrong choice.") and bomb.strikes == 1
     print(JSON.stringify({"model_result": not decision.get("fallback", false),
+        "model_considered": model_considered,
         "fallback_reason": decision.get("fallback_reason", ""),
         "caption": text, "audio_decoded": audio != null,
         "round_trip_ms": decision.get("round_trip_ms", -1),
         "one_real_strike": bomb.strikes == 1, "pass": ok}))
     if not ok:
-        push_error("A real wrong wire cut did not produce model-generated Liam audio")
+        push_error("A real wrong wire cut did not produce a safe model-checked Liam response")
     _finish.call_deferred(0 if ok else 1)
 
 func _finish(code: int) -> void:

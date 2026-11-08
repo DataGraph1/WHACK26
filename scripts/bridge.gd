@@ -35,6 +35,8 @@ const HOLD_TIME := 0.35        # a gesture must be held this long to register
 const CONFIRM_WINDOW := 10.0   # allows a live pre-confirmation cue before Victory
 const UDP_TIMEOUT := 1.0       # no packets for this long -> keyboard/mouse fallback
 const CAMERA_START_DELAY := 1.25
+const PREVIEW_URL := "http://127.0.0.1:4243/frame.jpg"
+const PREVIEW_INTERVAL := 0.12
 
 # Keys 1-7 match the gesture numbers in the manual (MediaPipe gesture ids).
 const KEY_GESTURES := {
@@ -60,6 +62,7 @@ var left_detected := false
 var right_detected := false
 var cursor_visible := false
 var camera_preview_texture: ImageTexture
+var camera_preview_error := ""
 
 var _udp := PacketPeerUDP.new()
 var _camera_bridge_pid := -1
@@ -68,6 +71,10 @@ var _held_since := 0.0
 var _fired := false
 var _kb_gesture := "None"
 var _fist_candidate: Control
+var _preview_http: HTTPRequest
+var _preview_elapsed := 0.0
+var _preview_busy := false
+var _preview_failures := 0
 
 
 func _ready() -> void:
@@ -75,6 +82,11 @@ func _ready() -> void:
     if err != OK:
         push_warning("Bridge: could not bind UDP port %d (error %d). Keyboard/mouse only." % [PORT, err])
         return
+    _preview_http = HTTPRequest.new()
+    _preview_http.timeout = 1.0
+    _preview_http.use_threads = true
+    add_child(_preview_http)
+    _preview_http.request_completed.connect(_on_preview_http_completed)
     _start_camera_bridge_after_delay()
 
 
@@ -124,7 +136,7 @@ func _input(event: InputEvent) -> void:
         _kb_gesture = "None"
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
     while _udp.get_available_packet_count() > 0:
         var data = JSON.parse_string(_udp.get_packet().get_string_from_utf8())
         if data is Dictionary:
@@ -136,6 +148,14 @@ func _process(_delta: float) -> void:
         selected_target = null
         _set_gesture("None")
         print("Camera bridge connected" if camera_connected else "Camera bridge disconnected")
+        if not camera_connected:
+            if _preview_busy:
+                _preview_http.cancel_request()
+                _preview_busy = false
+            _preview_failures = 0
+            camera_preview_texture = null
+            camera_frame_changed.emit(null)
+            camera_preview_error = ""
     if not camera_connected:
         camera_index = -1
         hand_count = 0
@@ -148,6 +168,11 @@ func _process(_delta: float) -> void:
     if keyboard_mode:
         cursor = get_viewport().get_mouse_position()
         _set_gesture(_kb_gesture)
+
+    _preview_elapsed += delta
+    if camera_connected and not _preview_busy and _preview_elapsed >= PREVIEW_INTERVAL:
+        _preview_elapsed = 0.0
+        _preview_busy = _preview_http.request(PREVIEW_URL) == OK
 
     if enabled:
         if is_instance_valid(selected_target):
@@ -219,16 +244,24 @@ func _ingest_camera_packet(data: Dictionary) -> void:
     else:
         var candidate := str(data.get("gesture", "None"))
         _set_gesture(candidate if keyboard_mode or candidate == "None" or gesture_confidence >= 0.65 else "None")
-    if data.has("frame_jpeg"):
-        _update_camera_preview(str(data["frame_jpeg"]))
+func _on_preview_http_completed(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+    _preview_busy = false
+    if result == HTTPRequest.RESULT_SUCCESS and code == 200:
+        _preview_failures = 0
+        camera_preview_error = ""
+        _update_camera_preview(body)
+    else:
+        _preview_failures += 1
+        if _preview_failures >= 5:
+            camera_preview_error = "Full-size camera preview unavailable on local port 4243"
 
 
-func _update_camera_preview(encoded_jpeg: String) -> void:
+func _update_camera_preview(jpeg_bytes: PackedByteArray) -> void:
     var image := Image.new()
-    if image.load_jpg_from_buffer(Marshalls.base64_to_raw(encoded_jpeg)) != OK:
+    if image.load_jpg_from_buffer(jpeg_bytes) != OK:
         return
     image.convert(Image.FORMAT_RGBA8)
-    if camera_preview_texture == null:
+    if camera_preview_texture == null or camera_preview_texture.get_size() != Vector2(image.get_width(), image.get_height()):
         camera_preview_texture = ImageTexture.create_from_image(image)
     else:
         camera_preview_texture.update(image)
@@ -293,6 +326,10 @@ func _lock_or_query_blue() -> void:
         pending = {}
         selected_target = hovered
         bot_said.emit("Locked %s. Move the pointer freely; fist here again to ask blue." % hovered.get_meta("desc"))
+        var module = hovered.get_meta("module", null)
+        NarratorClient.post_event({"game": module.title() if module is BombModule else "bomb",
+            "kind": "target_locked", "context": {"target": str(hovered.get_meta("desc", "")),
+                "target_id": hovered.get_instance_id()}})
         return
     if is_instance_valid(selected_target) and (hovered == selected_target or not pointer_ready):
         _arm("color", "blue")

@@ -8,11 +8,12 @@ Run:     python gesture_bridge.py      (press q in the preview window to quit)
 Godot starts this script with --no-preview and displays the camera in-game.
 """
 import argparse
-import base64
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 import socket
 import sys
+from threading import Lock, Thread
 import time
 import urllib.request
 
@@ -24,8 +25,9 @@ from hand_roles import extract_hand_packet
 from camera_devices import camera_candidates
 
 HOST, PORT = "127.0.0.1", 4242
-PREVIEW_SIZE = (240, 135)
-PREVIEW_EVERY = 3
+PREVIEW_PORT = 4243
+PREVIEW_EVERY = 2
+PREVIEW_QUALITY = 85
 MAX_PACKET_BYTES = 8000  # macOS limits local UDP datagrams to 9216 bytes by default.
 MODEL = "gesture_recognizer.task"
 MODEL_URL = ("https://storage.googleapis.com/mediapipe-models/gesture_recognizer/"
@@ -51,6 +53,40 @@ recognizer = vision.GestureRecognizer.create_from_options(
 )
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+preview_lock = Lock()
+latest_preview_jpeg = b""
+
+
+class PreviewHandler(BaseHTTPRequestHandler):
+    def log_message(self, *_args):
+        pass
+
+    def do_GET(self):
+        if self.path != "/frame.jpg":
+            self.send_error(404)
+            return
+        with preview_lock:
+            frame = latest_preview_jpeg
+        if not frame:
+            self.send_error(503)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "image/jpeg")
+        self.send_header("Content-Length", str(len(frame)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(frame)
+
+
+try:
+    preview_server = ThreadingHTTPServer((HOST, PREVIEW_PORT), PreviewHandler)
+except OSError as exc:
+    message = f"Camera preview port {PREVIEW_PORT} is unavailable; close any older game or bridge process: {exc}"
+    sock.sendto(json.dumps({"camera_error": message}).encode(), (HOST, PORT))
+    recognizer.close()
+    sock.close()
+    raise SystemExit(message) from exc
+Thread(target=preview_server.serve_forever, daemon=True).start()
 
 
 def open_working_camera():
@@ -62,6 +98,8 @@ def open_working_camera():
             if not capture.isOpened():
                 capture.release()
                 continue
+            capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+            capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
             for _ in range(10):
                 ok, test_frame = capture.read()
                 if ok and test_frame.std() >= 1.0:
@@ -88,6 +126,7 @@ except RuntimeError as exc:
     sock.close()
     raise SystemExit(message) from exc
 print(f"Using camera {camera_index}. Sending video and hand gestures to Godot on 127.0.0.1:4242.", flush=True)
+print(f"Camera capture: {int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))}x{int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))}; full-size preview on 127.0.0.1:{PREVIEW_PORT}.", flush=True)
 start = time.monotonic()
 cx, cy = 0.5, 0.5
 failed_reads = 0
@@ -105,7 +144,10 @@ try:
         failed_reads = 0
         # MediaPipe assigns anatomical Left/Right on the raw frame. Mirror only
         # the preview; flipping before inference reverses the task's labels.
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        tracking_frame = frame
+        if frame.shape[1] > 960:
+            tracking_frame = cv2.resize(frame, (960, round(frame.shape[0] * 960 / frame.shape[1])), interpolation=cv2.INTER_AREA)
+        rgb = cv2.cvtColor(tracking_frame, cv2.COLOR_BGR2RGB)
         image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
         result = recognizer.recognize_for_video(image, int((time.monotonic() - start) * 1000))
         frame_number += 1
@@ -114,14 +156,14 @@ try:
         cx, cy = packet["x"], packet["y"]
         packet["camera_index"] = camera_index
         if frame_number % PREVIEW_EVERY == 0:
-            small_frame = cv2.resize(cv2.flip(frame, 1), PREVIEW_SIZE, interpolation=cv2.INTER_AREA)
-            encoded_ok, jpeg = cv2.imencode(".jpg", small_frame, [cv2.IMWRITE_JPEG_QUALITY, 40])
+            encoded_ok, jpeg = cv2.imencode(".jpg", cv2.flip(frame, 1),
+                                            [cv2.IMWRITE_JPEG_QUALITY, PREVIEW_QUALITY])
             if encoded_ok:
-                packet["frame_jpeg"] = base64.b64encode(jpeg).decode("ascii")
+                with preview_lock:
+                    latest_preview_jpeg = jpeg.tobytes()
         payload = json.dumps(packet).encode()
         if len(payload) > MAX_PACKET_BYTES:
-            packet.pop("frame_jpeg", None)
-            payload = json.dumps(packet).encode()
+            raise RuntimeError("Gesture packet unexpectedly exceeded local UDP limit")
         sock.sendto(payload, (HOST, PORT))
 
         if not args.no_preview:
@@ -133,6 +175,7 @@ try:
                 break
 finally:
     cap.release()
+    preview_server.shutdown()
     cv2.destroyAllWindows()
     recognizer.close()
     sock.close()

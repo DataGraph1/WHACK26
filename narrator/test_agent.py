@@ -103,6 +103,47 @@ class NarratorStateTest(unittest.TestCase):
         self.assertEqual(prompt["trigger"], "hesitation")
         self.assertTrue(prompt["say"])
 
+    def test_eight_minute_round_warns_at_five_and_three_minutes(self):
+        self.send("round_started", {"lives": 3, "round_duration_seconds": 480,
+                                    "seconds_left": 480})
+        self.assertFalse(self.send("state", {"seconds_left": 479})["say"])
+        five = self.send("state", {"seconds_left": 299})
+        self.assertEqual(five["trigger"], "time_warning")
+        self.assertIn("5 minutes", five["text"])
+        three = self.send("state", {"seconds_left": 179})
+        self.assertEqual(three["trigger"], "time_warning")
+        self.assertIn("3 minutes", three["text"])
+
+    def test_live_target_and_link_events_speak(self):
+        for kind, context in (("target_locked", {"target": "wire 2"}),
+                              ("pending_action", {"target": "wire 2", "pending_id": "p3"}),
+                              ("link_contact", {"contacts_restored": 1})):
+            reply = self.send(kind, context)
+            self.assertTrue(reply["say"], kind)
+            self.assertEqual(reply["decision_source"], "model", kind)
+
+    def test_link_tracking_loss_gives_specific_recovery_cue(self):
+        reply = self.send("uncertainty", {"uncertainty_reason": "link_contact_lost"})
+        self.assertIn("HOLD pad", reply["text"])
+
+    def test_voice_failure_keeps_caption_and_exposes_reason(self):
+        def no_voice(*args):
+            raise NarratorUnavailable("ElevenLabs key has no credits")
+        self.agent._speech = no_voice
+        reply = self.send("target_locked", {"target": "wire 2"})
+        self.assertTrue(reply["say"])
+        self.assertEqual(reply["audio_base64"], "")
+        self.assertIn("no credits", reply["audio_error"])
+
+    def test_wrong_cut_cannot_send_player_back_to_spent_wire(self):
+        self.agent._ask_llm = lambda *args: {
+            "say": True, "text": "Inspect wire 2 again before cutting it",
+            "mood": "concerned", "reason": "Try this wire again"}
+        reply = self.send("result", {"target": "wire 2", "target_reusable": False,
+                                     "module_solved": False}, result="wrong", game="wires")
+        self.assertEqual(reply["decision_source"], "fallback")
+        self.assertIn("remaining wires", reply["text"])
+
     def test_intermediate_correct_stages_do_not_flood_audio(self):
         self.send("round_started", {"lives": 3})
         self.clock.now = 102
@@ -201,12 +242,13 @@ class NarratorStateTest(unittest.TestCase):
         self.assertEqual(reply["observed_pending_id"], "p1")
         self.assertIn("wire 2: blue = No", reply["evidence"])
 
-    def test_pending_action_quiets_if_model_unavailable(self):
+    def test_pending_action_gives_safe_cue_if_model_unavailable(self):
         def unavailable(*args):
             raise NarratorUnavailable("test outage")
         self.agent._ask_llm = unavailable
         reply = self.send("pending_action", {"target": "wire 2", "pending_id": "p2"})
-        self.assertFalse(reply["say"])
+        self.assertTrue(reply["say"])
+        self.assertIn("wire 2 is queued", reply["text"])
         self.assertEqual(reply["decision_source"], "fallback")
 
     def test_model_question_is_replaced_with_safe_line(self):
