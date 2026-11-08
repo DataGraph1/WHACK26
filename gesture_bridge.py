@@ -92,35 +92,71 @@ Thread(target=preview_server.serve_forever, daemon=True).start()
 def open_working_camera():
     backend = cv2.CAP_AVFOUNDATION if sys.platform == "darwin" else cv2.CAP_ANY
     candidates = camera_candidates(args.camera_index)
+    native_tried = False
     for attempt in range(8 if sys.platform == "darwin" else 1):
         for index in candidates:
             capture = cv2.VideoCapture(index, backend)
-            if not capture.isOpened():
-                capture.release()
-                continue
-            capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
-            capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
-            for _ in range(10):
-                ok, test_frame = capture.read()
-                if ok and test_frame.std() >= 1.0:
-                    return capture, index
-                time.sleep(0.1)
+            opened = capture.isOpened()
+            if opened:
+                capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+                capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+                for _ in range(10):
+                    ok, test_frame = capture.read()
+                    if ok and test_frame.std() >= 1.0:
+                        return capture, index
+                    time.sleep(0.1)
             capture.release()
-            print(f"Camera {index} returned only black frames; retrying the laptop camera.", flush=True)
+            failure = "returned only black frames" if opened else "could not open through OpenCV"
+            print(f"Camera {index} {failure}; trying native capture.", flush=True)
+            if sys.platform == "darwin" and not native_tried:
+                native_tried = True
+                native_capture = None
+                try:
+                    from native_camera import BuiltinCameraCapture
+                    native_capture = BuiltinCameraCapture(index)
+                    for _ in range(4):
+                        ok, test_frame = native_capture.read()
+                        if ok and test_frame.std() >= 1.0:
+                            print("Using native AVFoundation built-in camera after OpenCV failed.", flush=True)
+                            return native_capture, index
+                    raise RuntimeError(native_capture.error or "native capture returned no usable frame")
+                except (ImportError, RuntimeError, OSError, ValueError) as exc:
+                    print(f"Native built-in camera fallback unavailable: {exc}", flush=True)
+                    if native_capture is not None:
+                        native_capture.release()
         if sys.platform == "darwin" and attempt == 0:
-            notice = "Waiting for macOS Camera permission. Approve the popup; the game will retry for about 20 seconds."
+            try:
+                import AVFoundation as av
+                authorized = int(av.AVCaptureDevice.authorizationStatusForMediaType_(av.AVMediaTypeVideo)) == 3
+            except ImportError:
+                authorized = False
+            notice = ("Built-in camera capture failed; retrying."
+                      if authorized else
+                      "Waiting for macOS Camera permission. Approve the popup; the game will retry for about 20 seconds.")
             sock.sendto(json.dumps({"camera_notice": notice}).encode(), (HOST, PORT))
         if sys.platform == "darwin" and attempt < 7:
             time.sleep(2)
-    raise RuntimeError("Laptop camera unavailable. Check camera permission or privacy shutter.")
+    raise RuntimeError("Laptop camera unavailable. Check camera access or close other camera apps.")
 
 
 try:
     cap, camera_index = open_working_camera()
 except RuntimeError as exc:
-    message = (f"{exc} In macOS System Settings > Privacy & Security > Camera, "
-               "allow the listed Terminal, Python or Godot app, then quit and relaunch the game."
-               if sys.platform == "darwin" else str(exc))
+    message = str(exc)
+    if sys.platform == "darwin":
+        try:
+            import AVFoundation as av
+            status = int(av.AVCaptureDevice.authorizationStatusForMediaType_(av.AVMediaTypeVideo))
+        except ImportError:
+            status = -1
+        if status in (0, 2):
+            message += " In System Settings > Privacy & Security > Camera, allow Python, then relaunch."
+        elif status == 1:
+            message += " macOS has restricted camera access; check device restrictions."
+        elif status == 3:
+            message += " Python already has camera permission; check for another camera app or restart the laptop."
+        else:
+            message += " Install the camera packages from requirements-camera.txt, then relaunch."
     sock.sendto(json.dumps({"camera_error": message}).encode(), (HOST, PORT))
     recognizer.close()
     sock.close()

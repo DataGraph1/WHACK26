@@ -215,12 +215,12 @@ func _cancel_pending_if_target_changed(current: Control) -> void:
 func _ingest_camera_packet(data: Dictionary) -> void:
     if data.has("camera_notice"):
         camera_notice = str(data["camera_notice"]).left(220)
-        bot_said.emit("Waiting for Camera permission. Approve the macOS popup.")
+        bot_said.emit(camera_notice)
         return
     if data.has("camera_error"):
         camera_error = str(data["camera_error"]).left(220)
         camera_notice = ""
-        bot_said.emit("Camera blocked. Allow Camera access in macOS settings, then relaunch.")
+        bot_said.emit(camera_error)
         return
     camera_error = ""
     camera_notice = ""

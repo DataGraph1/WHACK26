@@ -121,9 +121,9 @@ func _process(delta: float) -> void:
     if is_instance_valid(Bridge.selected_target):
         s += "   |   locked: %s" % Bridge.selected_target.get_meta("desc")
     if not Bridge.camera_error.is_empty():
-        s += "\nCAMERA ACCESS BLOCKED"
+        s += "\nCAMERA UNAVAILABLE"
     elif not Bridge.camera_notice.is_empty():
-        s += "\nCAMERA WAITING FOR PERMISSION"
+        s += "\nCAMERA RETRYING"
     elif not Bridge.camera_preview_error.is_empty():
         s += "\n" + Bridge.camera_preview_error
     _status_label.text = s
