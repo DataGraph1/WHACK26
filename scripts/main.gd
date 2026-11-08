@@ -46,7 +46,7 @@ func _ready() -> void:
     add_child(_camera_preview)
     Bridge.camera_frame_changed.connect(func(texture: Texture2D) -> void: _camera_preview.texture = texture)
     var help := _make_label(
-        "Keys: 1 blue / 2 read / 3 yellow / 4 red / 5 green\n6 confirm / 7 cut or press (release between presses)\nK hand or keyboard mode / R restart",
+        "Keys: 1 blue / 2 read / 3 yellow / 4 red / 5 green\n6 confirm / 7 cut or press (release between presses)\nK hand or keyboard / R restart / F11 fullscreen",
         Vector2(880, 565), Vector2(380, 80), 12)
     help.modulate = Color(1, 1, 1, 0.6)
 
@@ -65,9 +65,10 @@ func _ready() -> void:
 func _on_narration_ready(text: String, audio: AudioStreamMP3, decision: Dictionary) -> void:
     _bot_label.text = text
     _log_evidence(decision)
+    var explanation := str(decision.get("fallback_reason", decision.get("reason", "")))
     _log("%s [%s] %d ms · %s" % ["SPEAK" if audio != null else "CAPTION",
         str(decision.get("decision_source", "model")).to_upper(),
-        int(decision.get("round_trip_ms", 0)), str(decision.get("reason", ""))])
+        int(decision.get("round_trip_ms", 0)), explanation])
 
 
 func _on_narrator_error(message: String) -> void:
@@ -86,8 +87,9 @@ func _on_narration_skipped(decision: Dictionary) -> void:
     if decision.get("trigger") == "state":
         return
     _log_evidence(decision)
+    var explanation := str(decision.get("fallback_reason", decision.get("reason", "")))
     _log("QUIET [%s] %d ms · %s" % [str(decision.get("decision_source", "rule")).to_upper(),
-        int(decision.get("round_trip_ms", 0)), str(decision.get("reason", ""))])
+        int(decision.get("round_trip_ms", 0)), explanation])
 
 
 func _make_label(text: String, pos: Vector2, sz: Vector2, font_size: int) -> Label:
@@ -118,8 +120,13 @@ func _process(delta: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
     var k := event as InputEventKey
-    if k != null and k.pressed and not k.echo and k.keycode == KEY_R:
+    if k == null or not k.pressed or k.echo:
+        return
+    if k.keycode == KEY_R:
         get_tree().reload_current_scene()
+    elif k.keycode == KEY_F11:
+        var window := get_window()
+        window.mode = Window.MODE_WINDOWED if window.mode == Window.MODE_FULLSCREEN else Window.MODE_FULLSCREEN
 
 
 func _show_welcome() -> void:

@@ -11,7 +11,7 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "narrator"))
-from agent_api import ELEVENLABS_API_KEY, OLLAMA_MODEL
+from agent_api import API_VERSION, ELEVENLABS_API_KEY, OLLAMA_MODEL, OLLAMA_URL
 
 
 def read_json(url, timeout=2):
@@ -42,10 +42,10 @@ def main():
         return process
     try:
         try:
-            models = read_json("http://127.0.0.1:11434/api/tags")
+            models = read_json(OLLAMA_URL + "/api/tags")
         except Exception:
             if args.check:
-                print("Ollama: not running")
+                print("Ollama: not running. Start Ollama, then run: ollama pull", OLLAMA_MODEL)
                 return 1
             ollama = shutil.which("ollama")
             if not ollama:
@@ -58,7 +58,7 @@ def main():
             start([ollama, "serve"], "ollama", env)
             for _ in range(30):
                 try:
-                    models = read_json("http://127.0.0.1:11434/api/tags")
+                    models = read_json(OLLAMA_URL + "/api/tags")
                     break
                 except Exception:
                     time.sleep(0.2)
@@ -74,16 +74,24 @@ def main():
             narrator_health = read_json("http://127.0.0.1:8765/health")
         except Exception:
             narrator_health = None
-        if narrator_health and narrator_health.get("text_model") != OLLAMA_MODEL:
-            print("Narrator is still running with", narrator_health.get("text_model"),
-                  "; restart that service before launching this version")
+        if narrator_health and (narrator_health.get("text_model") != OLLAMA_MODEL
+                                or narrator_health.get("api_version") != API_VERSION):
+            print("An older narrator service is still running on port 8765. Stop it, then rerun launch.py.")
             return 1
+        request = urllib.request.Request(OLLAMA_URL + "/api/generate", data=json.dumps(
+            {"model": OLLAMA_MODEL, "prompt": "Say OK", "stream": False,
+             "options": {"num_predict": 4}, "keep_alive": "1h"}).encode(),
+            headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(request, timeout=90) as response:
+                response.read()
+        except Exception as exc:
+            print("Text model could not generate a response:", exc)
+            print("Open Ollama, then try: ollama pull", OLLAMA_MODEL)
+            return 1
+        print("Text model: inference ready")
         if args.check:
             return 0 if godot and python.exists() else 1
-        request = urllib.request.Request("http://127.0.0.1:11434/api/generate", data=json.dumps(
-            {"model": OLLAMA_MODEL, "prompt": "", "keep_alive": "1h"}).encode(), headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(request, timeout=60) as response:
-            response.read()
         if not narrator_health:
             start([sys.executable, "narrator/agent_api.py"], "narrator")
             for _ in range(30):

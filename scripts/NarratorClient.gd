@@ -32,7 +32,7 @@ var _tracking_source: Node
 
 func _ready() -> void:
 	_http = HTTPRequest.new()
-	_http.timeout = 15.0
+	_http.timeout = 70.0
 	add_child(_http)
 	_http.request_completed.connect(_on_request_completed)
 	_player = AudioStreamPlayer.new()

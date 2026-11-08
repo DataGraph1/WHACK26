@@ -11,16 +11,18 @@ python3.12 launch.py --check
 python3.12 launch.py
 ```
 
-The launcher checks Godot, the camera environment, the local model and the voice key, warms Qwen, starts the API if needed, and opens the game. It writes process logs to ignored `.runtime/`. Press Ctrl-C to stop processes it started. If the narrator or voice is unavailable, the game reports that in its event feed and keeps local command feedback; a running narrator API returns labelled caption fallbacks.
+The launcher checks Godot, the camera environment, the local model and the voice key, runs a short Qwen inference, starts the API if needed, and opens the game. It writes process logs to ignored `.runtime/`. Press Ctrl-C to stop processes it started. If the narrator or voice is unavailable, the game reports that in its event feed and keeps local command feedback; a running narrator API returns labelled caption fallbacks. Press F11 to switch between windowed and fullscreen mode. The 16:9 game scales with the window.
 
 ## Setup on another laptop
 
 1. Install Godot 4.7, Python 3.12 and [Ollama](https://ollama.com/download). Run `ollama pull qwen2.5:3b`.
 2. In this directory, run `python3.12 -m venv .venv` and `.venv/bin/python -m pip install -r requirements-camera.txt`. On Windows, use `py -3.12 -m venv .venv` and `.venv\Scripts\python -m pip install -r requirements-camera.txt`.
 3. Copy `narrator/.env.example` to `narrator/.env` and set your ElevenLabs API key. That ignored file must stay off GitHub. Liam is configured as the voice.
-4. Run `python3.12 launch.py`. If Godot is not on PATH, set `GODOT_BIN` to its executable. On a different computer or port, update the API URL in `scripts/NarratorClient.gd`.
+4. Run `python3.12 launch.py`. On Windows, run `py -3.12 launch.py --check`, then `py -3.12 launch.py` in PowerShell. If Godot is not on PATH, set `GODOT_BIN` to its executable. On a different computer or port, update the API URL in `scripts/NarratorClient.gd`.
 
-The camera bridge starts from `.venv` automatically. On first launch it downloads the gesture model. It tries camera indices 0–2 and skips black feeds. You can force a device by starting `.venv/bin/python gesture_bridge.py --no-preview --camera-index 1` first. The game uses the existing bridge. Camera preview appears on the welcome screen before the timer starts.
+The camera bridge starts from `.venv` automatically. On first launch it downloads the gesture model. On macOS it identifies the built-in camera by AVFoundation device type and will not open an iPhone Continuity or USB camera, even if the built-in camera is unavailable. On Windows it opens only default camera index 0 and does not try other devices. Camera preview appears on the welcome screen before the timer starts.
+
+If the feed says **Model unavailable; factual fallback**, this refers to the local Ollama text model, not ElevenLabs speech. On Windows, run `ollama list` and confirm `qwen2.5:3b` is installed; if missing, run `ollama pull qwen2.5:3b`. Start Ollama, stop any old narrator service on port 8765, then run `py -3.12 launch.py --check` and `py -3.12 launch.py`. The live feed now shows whether Ollama is unreachable, the model is missing, or inference timed out. A slower Windows laptop can set `OLLAMA_TIMEOUT_SECONDS` in `narrator/.env`, but responses taking tens of seconds will be too late for live play.
 
 If the game shows **CAMERA WAITING FOR PERMISSION**, approve the macOS camera popup; the bridge retries for about 20 seconds. If it changes to **CAMERA ACCESS BLOCKED**, quit the game, open **System Settings → Privacy & Security → Camera**, enable whichever app macOS lists for this run (Terminal, Python or Godot), then run `python3.12 launch.py` again. `launch.py --check` verifies installed camera packages, not macOS permission; the actual camera is checked when the game opens. The detailed OpenCV message is in `.runtime/game.log`.
 

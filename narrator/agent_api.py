@@ -21,7 +21,7 @@ def load_local_config():
     allowed = {
         "ELEVENLABS_API_KEY", "ELEVENLABS_VOICE_ID", "ELEVENLABS_VOICE_NAME",
         "ELEVENLABS_MODEL_ID",
-        "OLLAMA_URL", "OLLAMA_MODEL", "NARRATOR_HOST", "NARRATOR_PORT",
+        "OLLAMA_URL", "OLLAMA_MODEL", "OLLAMA_TIMEOUT_SECONDS", "NARRATOR_HOST", "NARRATOR_PORT",
         "NARRATOR_ALLOW_ORIGIN",
     }
     for line in config_path.read_text(encoding="utf-8").splitlines():
@@ -41,6 +41,7 @@ load_local_config()
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
+OLLAMA_TIMEOUT_SECONDS = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "30"))
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
 ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "TX3LPaxmHKxFdv7VOQHJ")
 ELEVENLABS_VOICE_NAME = os.getenv("ELEVENLABS_VOICE_NAME", "Liam - Energetic, Social Media Creator")
@@ -48,6 +49,7 @@ ELEVENLABS_MODEL_ID = os.getenv("ELEVENLABS_MODEL_ID", "eleven_v4_turbo")
 ALLOW_ORIGIN = os.getenv("NARRATOR_ALLOW_ORIGIN", "")
 HOST = os.getenv("NARRATOR_HOST", "127.0.0.1")
 PORT = int(os.getenv("NARRATOR_PORT", "8765"))
+API_VERSION = 2
 
 SYSTEM_PROMPT = """You are a cheerful, quick-witted live narrator for a one-player bomb puzzle.
 The right index finger points; the left hand commands; Victory confirms. Both hands are required for camera commands. Never suggest a one-hand workaround or skipping confirmation. The player cannot speak back, so never ask a question or request more context.
@@ -163,11 +165,21 @@ class NarratorAgent:
             OLLAMA_URL + "/api/chat", data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"}, method="POST")
         try:
-            with urllib.request.urlopen(request, timeout=6.5) as response:
+            with urllib.request.urlopen(request, timeout=OLLAMA_TIMEOUT_SECONDS) as response:
                 outer = json.load(response)
             decision = json.loads(outer["message"]["content"])
-        except (urllib.error.URLError, TimeoutError, OSError) as exc:
-            raise NarratorUnavailable("Ollama is unavailable or the model is not installed") from exc
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                raise NarratorUnavailable(f"Missing {OLLAMA_MODEL}; run ollama pull {OLLAMA_MODEL}") from exc
+            raise NarratorUnavailable(f"Ollama returned HTTP {exc.code}; check Ollama's local logs") from exc
+        except urllib.error.URLError as exc:
+            if isinstance(exc.reason, TimeoutError):
+                raise NarratorUnavailable(f"Ollama timed out after {OLLAMA_TIMEOUT_SECONDS:g}s; use launch.py to warm it") from exc
+            raise NarratorUnavailable("Cannot reach Ollama; start Ollama or use launch.py") from exc
+        except TimeoutError as exc:
+            raise NarratorUnavailable(f"Ollama timed out after {OLLAMA_TIMEOUT_SECONDS:g}s; use launch.py to warm it") from exc
+        except OSError as exc:
+            raise NarratorUnavailable(f"Ollama request failed: {exc}") from exc
         except (KeyError, ValueError, TypeError) as exc:
             raise BadModelOutput("The text model did not return valid JSON") from exc
         if not isinstance(decision, dict) or not isinstance(decision.get("say"), bool):
@@ -564,7 +576,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
-            self._json(200, {"status": "waiting_for_game_event", "text_model": OLLAMA_MODEL,
+            self._json(200, {"status": "waiting_for_game_event", "api_version": API_VERSION,
+                             "text_model": OLLAMA_MODEL,
                              "elevenlabs_key_present": bool(ELEVENLABS_API_KEY),
                              "voice": ELEVENLABS_VOICE_NAME,
                              "voice_id": ELEVENLABS_VOICE_ID,

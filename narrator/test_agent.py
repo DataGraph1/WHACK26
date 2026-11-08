@@ -1,11 +1,37 @@
 """Stateful event decisions without calling Ollama or ElevenLabs."""
 
 import unittest
+from unittest.mock import patch
+import urllib.error
 
 try:
-    from .agent_api import NarratorAgent, NarratorUnavailable, validate_event
+    from .agent_api import NarratorAgent, NarratorUnavailable, Session, validate_event
 except ImportError:
-    from agent_api import NarratorAgent, NarratorUnavailable, validate_event
+    from agent_api import NarratorAgent, NarratorUnavailable, Session, validate_event
+
+
+class OllamaErrorTest(unittest.TestCase):
+    def setUp(self):
+        self.agent = NarratorAgent()
+        self.event = validate_event({"session_id": "test", "event_id": "1", "game": "wires",
+                                     "kind": "result", "result": "wrong", "context": {}})
+
+    def ask(self):
+        return self.agent._ask_llm(self.event, Session(), 1)
+
+    def test_missing_model_has_pull_command(self):
+        with patch("urllib.request.urlopen", side_effect=urllib.error.HTTPError(
+                "http://127.0.0.1", 404, "not found", {}, None)):
+            with self.assertRaisesRegex(NarratorUnavailable, "ollama pull"):
+                self.ask()
+
+    def test_unreachable_server_is_distinct_from_timeout(self):
+        with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("connection refused")):
+            with self.assertRaisesRegex(NarratorUnavailable, "Cannot reach Ollama"):
+                self.ask()
+        with patch("urllib.request.urlopen", side_effect=TimeoutError("timed out")):
+            with self.assertRaisesRegex(NarratorUnavailable, "timed out"):
+                self.ask()
 
 
 class FakeClock:

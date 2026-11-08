@@ -21,6 +21,7 @@ import mediapipe as mp
 from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import vision
 from hand_roles import extract_hand_packet
+from camera_devices import camera_candidates
 
 HOST, PORT = "127.0.0.1", 4242
 PREVIEW_SIZE = (240, 135)
@@ -54,7 +55,7 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 def open_working_camera():
     backend = cv2.CAP_AVFOUNDATION if sys.platform == "darwin" else cv2.CAP_ANY
-    candidates = [args.camera_index] if args.camera_index is not None else [0, 1, 2]
+    candidates = camera_candidates(args.camera_index)
     for attempt in range(8 if sys.platform == "darwin" else 1):
         for index in candidates:
             capture = cv2.VideoCapture(index, backend)
@@ -67,19 +68,19 @@ def open_working_camera():
                     return capture, index
                 time.sleep(0.1)
             capture.release()
-            print(f"Camera {index} returned only black frames; trying another camera.", flush=True)
+            print(f"Camera {index} returned only black frames; retrying the laptop camera.", flush=True)
         if sys.platform == "darwin" and attempt == 0:
             notice = "Waiting for macOS Camera permission. Approve the popup; the game will retry for about 20 seconds."
             sock.sendto(json.dumps({"camera_notice": notice}).encode(), (HOST, PORT))
         if sys.platform == "darwin" and attempt < 7:
             time.sleep(2)
-    raise RuntimeError("No working camera found. Check camera permission, privacy shutter, or use --camera-index.")
+    raise RuntimeError("Laptop camera unavailable. Check camera permission or privacy shutter.")
 
 
 try:
     cap, camera_index = open_working_camera()
 except RuntimeError as exc:
-    message = ("Camera unavailable. In macOS System Settings > Privacy & Security > Camera, "
+    message = (f"{exc} In macOS System Settings > Privacy & Security > Camera, "
                "allow the listed Terminal, Python or Godot app, then quit and relaunch the game."
                if sys.platform == "darwin" else str(exc))
     sock.sendto(json.dumps({"camera_error": message}).encode(), (HOST, PORT))
