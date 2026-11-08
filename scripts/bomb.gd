@@ -41,6 +41,7 @@ func _ready() -> void:
         module_names.append(module.title())
     NarratorClient.begin_round(str(Time.get_ticks_usec()), "bomb", {
         "lives": 3, "seconds_left": time_left, "round_duration_seconds": time_left,
+        "modules_remaining": module_count,
         "modules": module_names,
         "mission": "Disarm every module using the field guide and both hands",
     })
@@ -174,7 +175,8 @@ func handle(target: Control, kind: String, _value: String, _count: int) -> Strin
 func _process(delta: float) -> void:
     if over:
         return
-    NarratorClient.update_round_state("bomb", {"seconds_left": time_left, "lives": maxi(0, 3 - strikes), "strikes": strikes})
+    NarratorClient.update_round_state("bomb", {"seconds_left": time_left, "lives": maxi(0, 3 - strikes),
+        "strikes": strikes, "modules_remaining": _modules_remaining()})
     time_left -= delta
     if time_left <= 0.0:
         time_left = 0.0
@@ -206,6 +208,14 @@ func _on_disarmed() -> void:
         if not m.solved:
             return
     _end(true)
+
+
+func _modules_remaining() -> int:
+    var remaining := 0
+    for module in modules:
+        if not module.solved:
+            remaining += 1
+    return remaining
 
 
 func _end(won: bool) -> void:

@@ -13,7 +13,7 @@ Call it from game logic **after it knows the result**. `Bridge.tracking_context(
 ```gdscript
 NarratorClient.begin_round("round-001", "bomb", {"lives": 3, "seconds_left": 180})
 NarratorClient.update_round_state("bomb", {
-    "seconds_left": 84, "lives": 2, "strikes": 1
+    "seconds_left": 84, "lives": 2, "strikes": 1, "modules_remaining": 1
 })
 var context := Bridge.tracking_context()
 context["lives"] = 2
@@ -27,7 +27,7 @@ For another module, change the `game` name and action. You can send other live e
 
 After `begin_round`, the Godot client sends a `state` heartbeat about once per second. It includes elapsed and idle time, both hands' tracking context, and recent game facts supplied through `update_round_state`. The server handles routine state updates without an LLM call. Inspection results are spoken from the game's named target, query and answer. A queued press is sent to the model after a short pause so it can choose whether a remembered observation merits a pre-confirmation cue. When the timer crosses 60, 30, or 10 seconds, when the player reaches the last life, or when camera tracking is uncertain, the server writes a short line directly from current verified state. When the right hand is visible and the player has been idle at least 12 seconds, the LLM may offer a pacing prompt. Pacing and uncertainty have cooldowns. Wrong and module-completion results speak; rapid intermediate correct stages can stay quiet because the game acknowledges them immediately. A closed round suppresses later events.
 
-The agent remembers visited games, inspected targets, recent events and spoken lines, plus its wrong-answer streak and total mistakes. The LLM sees sanitized observations to avoid repetition and adapt its tone. Numeric timer and life counts are kept out of its prompt; the server adds those only from current game state. `begin_round` resets memory. The response has `trigger`, `observed_kind`, `evidence`, `decision_source`, a short `reason`, and `policy_guarded` or `fallback` when applicable for the live feed.
+The agent remembers visited games, inspected targets, recent events and spoken lines, plus its wrong-answer streak, total mistakes and remaining module count. Liam begins upbeat, celebrates correct results, grows agitated after a mistake and angry after repeated mistakes. With under a minute left he becomes frantic; on the last unfinished module under a minute he sounds worried. The game supplies `modules_remaining`, `seconds_left`, and `lives` so these states come from live facts. The LLM sees sanitized observations, a current performance direction and recent lines. It uses more varied wording, and a policy-breaking line gets one guided rewrite before factual fallback. Numeric timer and life counts are kept out of its prompt; the server adds those only from current game state. `begin_round` resets memory. The response includes `mood`, `delivery_direction`, `trigger`, `observed_kind`, `evidence`, `decision_source`, a short `reason`, and `policy_guarded` or `fallback` when applicable for the live feed.
 
 ### Event contract
 
@@ -49,7 +49,7 @@ The agent remembers visited games, inspected targets, recent events and spoken l
 {
   "say": true,
   "text": "Correct! That module is safely behind us; keep moving.",
-  "mood": "cheerful",
+  "mood": "excited",
   "reason": "A confirmed result should be acknowledged",
   "voice": "Liam - Energetic, Social Media Creator",
   "voice_id": "TX3LPaxmHKxFdv7VOQHJ",
@@ -65,7 +65,7 @@ The agent remembers visited games, inspected targets, recent events and spoken l
 }
 ```
 
-The LLM sees the current event, recent events, previous lines, and round memory, with numeric counters removed. It writes short commentary for observations that merit speech. The server adds the verified correct/wrong prefix itself. Inspections, timer, life, uncertainty, start, and end lines are guarded and composed from verified state. Duplicate event IDs are ignored. `decision_source` identifies model, guard, rule or fallback; `evidence` lists recent observed facts from the current module. The `reason` field is for the live feed; it is not spoken.
+The LLM sees the current event, recent events, previous lines, round memory and personality direction, with numeric counters removed. It writes short commentary for observations that merit speech. The server adds the verified correct/wrong prefix itself. Inspections, timer, life, uncertainty, start, and end lines are guarded and composed from verified state, with a few safe phrasing variants. Duplicate event IDs are ignored. `decision_source` identifies model, guard, rule or fallback; `evidence` lists recent observed facts from the current module. The `reason` field is for the live feed; it is not spoken.
 
 Focus lines are discarded by the Godot client if the pointer has moved to another target while Qwen and speech were running. Model lines can occasionally be rejected as `FALLBACK` if they ask a question or make an unsupported claim about the clock, lives, tracking, or an unfinished module. This keeps the live feed honest about what the model actually wrote.
 
@@ -87,6 +87,6 @@ python3.12 agent_api.py
 
 The API listens on `127.0.0.1:8765` by default. Change `NARRATOR_HOST` and `NARRATOR_PORT` if Godot runs on a different device. If Godot is exported as a browser game on a different origin, set `NARRATOR_ALLOW_ORIGIN` to that exact origin. If Godot and the API run on the same computer, the default URL works. Without Ollama, the service returns labelled factual fallback text; without ElevenLabs, it returns captions without audio.
 
-Configuration: `OLLAMA_URL`, `OLLAMA_MODEL`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_VOICE_NAME`, and `ELEVENLABS_MODEL_ID` can be set in the environment or local `.env`. `GET /health` reports whether a key is configured, without exposing it. The server sends `[happy]`, `[worried]`, `[tense]`, or `[urgent]` as voice directions while keeping the displayed caption free of tags. Set `ELEVENLABS_MODEL_ID=eleven_v3` if your account does not have access to v4 Turbo.
+Configuration: `OLLAMA_URL`, `OLLAMA_MODEL`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_VOICE_NAME`, and `ELEVENLABS_MODEL_ID` can be set in the environment or local `.env`. `GET /health` reports whether a key is configured, without exposing it. The server sends Liam expressive tags such as `[excited]`, `[angry]`, `[rushed]`, and `[worried]`, and adjusts stability by mood, while keeping displayed captions free of tags. Eleven v4 Turbo does not expose a reliable speed slider, so `[rushed]` directs the late-game pace. Set `ELEVENLABS_MODEL_ID=eleven_v3` if your account does not have access to v4 Turbo.
 
 For background on the bridge, see the official [Godot HTTPRequest](https://docs.godotengine.org/en/stable/classes/class_httprequest.html) and [AudioStreamMP3](https://docs.godotengine.org/en/stable/classes/class_audiostreammp3.html) documentation. The GDScript adapter targets Godot 4.4 or later.

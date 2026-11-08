@@ -411,7 +411,9 @@ func _confirm() -> void:
     if p.kind == "press" and module is WiresModule:
         selected_target = null  # A cut wire cannot be used again.
     var game_name: String = module.title() if module is BombModule else "bomb"
-    var context := {"target": str(p.target.get_meta("desc")), "observation": reply, "seconds_left": bomb.time_left, "lives": maxi(0, 3 - bomb.strikes)}
+    var context := {"target": str(p.target.get_meta("desc")), "observation": reply,
+        "seconds_left": bomb.time_left, "lives": maxi(0, 3 - bomb.strikes),
+        "modules_remaining": bomb._modules_remaining()}
     if not bomb.over:
         if p.kind == "press" and module is BombModule and not was_solved and (bomb.strikes > before_strikes or reply.begins_with("Correct") or module.solved):
             context["module_solved"] = module.solved

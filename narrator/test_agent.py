@@ -3,6 +3,7 @@
 import unittest
 from unittest.mock import patch
 import urllib.error
+import json
 
 try:
     from .agent_api import NarratorAgent, NarratorUnavailable, Session, validate_event
@@ -47,7 +48,7 @@ class FakeAgent(NarratorAgent):
         super().__init__(clock=clock)
         self.llm_calls = 0
 
-    def _ask_llm(self, event, session, wrong_streak):
+    def _ask_llm(self, event, session, wrong_streak, correction=""):
         self.llm_calls += 1
         return {"say": True, "text": f"Observed {event['kind']}",
                 "mood": "cheerful", "reason": "Current observation merits a short line"}
@@ -86,7 +87,7 @@ class NarratorStateTest(unittest.TestCase):
         self.clock.now = 130
         warning = self.send("state", {"seconds_left": 29, "right_hand_visible": True})
         self.assertEqual(warning["trigger"], "time_warning")
-        self.assertEqual(warning["mood"], "urgent")
+        self.assertEqual(warning["mood"], "frantic")
         self.assertIn("30 seconds", warning["text"])
         self.assertTrue(warning["policy_guarded"])
         self.clock.now = 134
@@ -177,7 +178,7 @@ class NarratorStateTest(unittest.TestCase):
         self.assertFalse(self.send("uncertainty", {"uncertainty_reason": "right_hand_missing"})["say"])
         self.clock.now = 120
         result = self.send("result", {"lives": 1}, result="wrong", action="cut wire 2")
-        self.assertEqual(result["mood"], "urgent")
+        self.assertEqual(result["mood"], "agitated")
         self.assertTrue(result["text"].startswith("Wrong choice."))
         self.assertIn("One life remains", result["text"])
         self.clock.now = 124
@@ -286,7 +287,7 @@ class NarratorStateTest(unittest.TestCase):
         result = self.send("result", {"target": "wire 2", "target_reusable": False},
                            result="wrong", game="WIRES")
         self.assertTrue(result["fallback"])
-        self.assertIn("remaining targets", result["text"])
+        self.assertIn("remaining wires", result["text"])
 
     def test_wrong_result_does_not_send_player_away_from_active_module(self):
         self.agent._ask_llm = lambda *args: {
@@ -315,7 +316,7 @@ class NarratorStateTest(unittest.TestCase):
         result = self.send("result", {"module_solved": False, "target_reusable": False},
                            result="wrong")
         self.assertTrue(result["fallback"])
-        self.assertIn("unavailable target", result["fallback_reason"])
+        self.assertIn("cannot be reused", result["fallback_reason"])
 
     def test_model_observation_omits_counters(self):
         event = validate_event({"session_id": "r", "game": "wires", "kind": "result",
@@ -323,6 +324,63 @@ class NarratorStateTest(unittest.TestCase):
             "lives": 2, "strikes": 1}})
         observation = self.agent._model_observation(event)["context"]
         self.assertEqual(observation, {"target": "wire 2"})
+
+    def test_personality_tracks_success_mistakes_and_final_module_pressure(self):
+        self.send("round_started", {"lives": 3, "seconds_left": 480,
+                                    "modules_remaining": 4})
+        self.assertEqual(self.agent.sessions["round-1"].last_modules_remaining, 4)
+        self.clock.now = 105
+        self.assertEqual(self.send("result", {"lives": 2, "seconds_left": 300,
+                                              "modules_remaining": 3}, result="wrong")["mood"], "agitated")
+        self.clock.now = 110
+        self.assertEqual(self.send("result", {"lives": 2, "seconds_left": 290,
+                                              "modules_remaining": 3}, result="correct")["mood"], "excited")
+        self.clock.now = 115
+        self.assertEqual(self.send("result", {"lives": 2, "seconds_left": 200,
+                                              "modules_remaining": 2}, result="wrong")["mood"], "angry")
+        self.clock.now = 120
+        self.assertEqual(self.send("state", {"lives": 2, "seconds_left": 29,
+                                             "modules_remaining": 2})["mood"], "frantic")
+        self.clock.now = 125
+        self.assertEqual(self.send("state", {"lives": 2, "seconds_left": 9,
+                                             "modules_remaining": 1})["mood"], "worried")
+
+    def test_guarded_inspection_varies_without_changing_observed_fact(self):
+        first = self.send("inspection_result", {"target": "wire 2", "query": "blue",
+                                                "observation": "No"})
+        second = self.send("inspection_result", {"target": "wire 2", "query": "blue",
+                                                 "observation": "No"})
+        self.assertNotEqual(first["text"], second["text"])
+        self.assertIn("wire 2 is not blue", first["text"])
+        self.assertIn("wire 2 is not blue", second["text"])
+
+    def test_elevenlabs_delivery_changes_without_changing_caption(self):
+        class FakeResponse:
+            def __enter__(self): return self
+            def __exit__(self, *_args): return False
+            def read(self): return b"mp3"
+        requests = []
+        def record(request, timeout):
+            requests.append(json.loads(request.data))
+            return FakeResponse()
+        with patch("narrator.agent_api.ELEVENLABS_API_KEY", "test-key"), patch(
+                "urllib.request.urlopen", side_effect=record):
+            NarratorAgent._speech(self.agent, "That went well.", "excited")
+            NarratorAgent._speech(self.agent, "Time is short.", "frantic")
+        self.assertEqual(requests[0]["text"], "[excited] That went well.")
+        self.assertTrue(requests[1]["text"].startswith("[rushed]"))
+        self.assertLess(requests[0]["voice_settings"]["stability"], 0.5)
+
+    def test_model_cannot_invent_next_target_after_a_result(self):
+        self.agent._ask_llm = lambda *args: {
+            "say": True, "text": "Wire 3 awaits your attention", "mood": "cheerful",
+            "reason": "Move ahead"}
+        result = self.send("result", {"target": "wire 2", "module_solved": True,
+                                      "modules_remaining": 1}, result="correct", game="WIRES",
+                           action="cut wire 2")
+        self.assertTrue(result["fallback"])
+        self.assertNotIn("wire 3", result["text"].lower())
+        self.assertEqual(result["mood"], "excited")
 
 
 if __name__ == "__main__":

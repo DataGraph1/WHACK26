@@ -30,6 +30,8 @@ func run() -> void:
     check(bomb.time_left == 180.0, "Round must start at 180 seconds")
     check(bomb.has_strike_indicator, "Every round must have three strikes")
     check(events[0].kind == "round_started", "Actual game must start narrator round")
+    check(events[0].context.modules_remaining == 2,
+        "Narrator must know how many modules remain at round start")
     var wires: WiresModule
     for module in bomb.modules:
         if module is WiresModule:
@@ -164,6 +166,8 @@ func run() -> void:
         "Narrator must receive the actual command and solved state")
     check(events[-1].context.target_reusable == false,
         "Cut wire must be marked unavailable for further attempts")
+    check(events[-1].context.modules_remaining == bomb._modules_remaining(),
+        "Solved module result must report the current remaining count")
     check(not events[-1].context.has("correct"), "Hidden solution must not enter context")
     var link: LinkModule
     for module in bomb.modules:

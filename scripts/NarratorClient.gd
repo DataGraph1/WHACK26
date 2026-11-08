@@ -10,7 +10,7 @@ signal narrator_error(message: String)
 @export var api_url := "http://127.0.0.1:8765/v1/events"
 @export var auto_play_audio := true
 @export var heartbeat_interval_seconds := 1.0
-const EXPECTED_API_VERSION := 3
+const EXPECTED_API_VERSION := 4
 
 var session_id := ""
 var _http: HTTPRequest
