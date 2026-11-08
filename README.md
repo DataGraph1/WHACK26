@@ -30,7 +30,9 @@ The status panel separately shows whether the left command hand and right pointe
 
 ## Play
 
-Print [revision 9 of the field guide](docs/PLAYER_MANUAL_print.html), or read its [Markdown source](docs/PLAYER_MANUAL.md). Older guides have different controls. Choose two modules for a three-minute demo or four for an eight-minute round. Every round has three lives. Link Recovery always appears; the other modules are selected randomly.
+Print [revision 10 of the field guide](docs/PLAYER_MANUAL_print.html), or read its [Markdown source](docs/PLAYER_MANUAL.md). Older guides have different controls. Choose two modules for a three-minute demo or four for an eight-minute round. Every round has three lives. Link Recovery always appears; the other modules are selected randomly.
+
+The bomb-module format and Memory puzzle are inspired by Keep Talking and Nobody Explodes. Remote gesture controls, Link Recovery and the live observing narrator are original to this project.
 
 Right index finger points. The pointer now reaches the board edges with less arm travel. A left fist locks the hovered target (yellow outline); another fist on a different target moves the lock, while a fist on the same target asks if it is blue. With a lock, the left hand can query colour, read text, queue a press, and confirm even after the right pointer moves or leaves view. An orange outline marks a pending command. Hold a gesture for about 0.35 seconds and release between repeats. Link Recovery needs continuous right-pointer contact and an open left palm; brief tracking flickers now pause its charge before a sustained loss resets it. Press K to use the mouse and keys 1–7 even if a camera is connected. R restarts.
 

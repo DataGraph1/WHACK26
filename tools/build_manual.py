@@ -45,7 +45,8 @@ while i < len(lines):
         continue
     paragraph = [line]
     i += 1
-    while i < len(lines) and lines[i].strip() and not lines[i].startswith(('#', '|')):
+    while (i < len(lines) and lines[i].strip() and not lines[i].startswith(('#', '|'))
+           and not re.match(r'^\d+\. ', lines[i].strip())):
         paragraph.append(lines[i].strip())
         i += 1
     parts.append('<p>' + inline(' '.join(paragraph)) + '</p>')
@@ -63,5 +64,6 @@ th,td { border: 1px solid #a4b6bd; padding: 1.6mm; text-align: left; }
 th { background: #d9eaf0; }
 @media screen { body { padding: 20px; } }
 '''
-target.write_text('<!doctype html><html lang="en"><meta charset="utf-8"><title>Bot Defusal field guide, revision 9</title><style>' + style + '</style><body>' + '\n'.join(parts) + '</body></html>\n', encoding='utf-8')
+title = inline(lines[0].lstrip('# '))
+target.write_text('<!doctype html><html lang="en"><meta charset="utf-8"><title>' + title + '</title><style>' + style + '</style><body>' + '\n'.join(parts) + '</body></html>\n', encoding='utf-8')
 print(target)

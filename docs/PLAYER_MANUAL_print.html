@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><meta charset="utf-8"><title>Bot Defusal field guide, revision 9</title><style>
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Bot Defusal Field Guide Revision 10</title><style>
 @page { size: A4; margin: 12mm; }
 body { font: 10.5pt/1.35 -apple-system, BlinkMacSystemFont, Arial, sans-serif; color: #17243a; max-width: 800px; margin: auto; }
 h1 { font-size: 24pt; margin: 0 0 4mm; color: #123f59; }
@@ -10,12 +10,13 @@ table { width: 100%; border-collapse: collapse; margin: 3mm 0 5mm; font-size: 9p
 th,td { border: 1px solid #a4b6bd; padding: 1.6mm; text-align: left; }
 th { background: #d9eaf0; }
 @media screen { body { padding: 20px; } }
-</style><body><h1>Bot Defusal — field guide, revision 9</h1>
+</style><body><h1>Bot Defusal Field Guide Revision 10</h1>
 <p>You are operating a remote robot through a damaged video link. Colours and lettering are obscured. Point at a component and ask the robot to inspect it; use the facts it reports to apply this guide. The narrator knows your observations and progress, but does not receive the solution.</p>
 <h2>Mission</h2>
-<p>Disarm a two-module round within three minutes or a four-module round within eight minutes. A third mistake ends the round. Mistakes do not accelerate the clock. Press R to begin a new random round. All rules below are checked from top to bottom: use the first matching rule.</p>
+<p>Disarm a two-module round within three minutes or a four-module round within eight minutes. A third mistake ends the round. Mistakes do not accelerate the clock. Press R to begin a new random round. In each puzzle section, check rules from top to bottom and use the first one that applies.</p>
 <h2>Controls</h2>
-<p>Right index finger: move the cursor. The central part of the camera view now reaches the whole board, so small hand movements move the pointer further. Point at a target and hold a left fist for at least 0.35 seconds to <strong>lock</strong> it; a yellow outline remains when the pointer moves. You can lower your right hand after locking. Point at another target and fist again to change the lock. A fist on the already locked target (or with the pointer out of view) asks whether it is blue. Release between repeated gestures.</p>
+<p>Use your <strong>right index finger</strong> to move the cursor. Small hand movements cover the whole board; you do not need to reach to the edge of the camera view. Hover over the wire, button, label or display you want. Hold a <strong>left fist</strong> for about 0.35 seconds to lock it. A <strong>yellow outline</strong> marks the locked target and stays there when your pointer moves. You may lower your right hand after locking. To change targets, point at a different one and fist again. Release your left hand between gestures.</p>
+<p>A fist on the <strong>same</strong> locked target asks whether it is blue. The same blue query works if your right pointer is out of view after locking. A fist over empty space leaves the lock where it is. <strong>A fist does not cut a wire or press a button.</strong></p>
 <table><thead><tr><th>Left hand</th><th>Keyboard equivalent</th><th>Command</th></tr></thead><tbody>
 <tr><td>Closed fist</td><td>1</td><td>Lock the pointed target; repeat on the same target to ask whether it is blue</td></tr>
 <tr><td>Open palm</td><td>2</td><td>Read the target&#x27;s text or number</td></tr>
@@ -25,17 +26,42 @@ th { background: #d9eaf0; }
 <tr><td>Victory / two fingers</td><td>6</td><td>Confirm the pending command</td></tr>
 <tr><td>I-love-you sign</td><td>7</td><td>Queue a cut or button press</td></tr>
 </tbody></table>
-<p>With a target locked, inspection and press commands use that target even if the pointer moves or leaves view. Victory confirms the pending command within ten seconds; the orange outline shows what is pending. The narrator may comment while a press is queued; you may wait for the cue or confirm immediately. For multiple presses, repeat the press gesture the required number of times before confirming once. Each press refreshes the confirmation window. Fisting on a different target changes the lock and cancels any pending command. Without a lock, keep pointing at the same target until confirmation; moving away or losing the right pointer cancels the command. An uncertain left-hand gesture is ignored while you release your hand between commands. Press K to toggle mouse and keyboard controls even while the camera is connected; switching modes clears the lock. Press P to enlarge or restore the camera preview. With no camera connection, mouse and keyboard provide the same controls automatically.</p>
+<p>With a target locked, inspection and press commands use that target even if the pointer moves or leaves view. Make an inspection or press gesture, then show <strong>Victory</strong> within ten seconds to confirm it. An <strong>orange outline</strong> marks the pending command. You can wait for the narrator&#x27;s cue or confirm immediately. To press a button multiple times, show the I-love-you sign once for each press, releasing between signs, then confirm once. Each sign refreshes the ten-second window. Fisting on another target changes the lock and cancels the pending command. Without a lock, keep pointing at the same target until confirmation; moving away cancels it. If a gesture is not recognized, release your left hand and try again.</p>
+<p><strong>Example — cut a wire:</strong> point to wire 2 with your right index finger, hold a left fist until the yellow lock appears, release, show I-love-you, release, then show Victory. <strong>Example — read a label:</strong> lock the label, show an open palm, release, then show Victory. The robot reports the answer; the narrator may react to it but does not tell you the solution.</p>
+<p>Press <strong>K</strong> to toggle mouse and keyboard controls, even while the camera is connected; switching modes clears the lock. In keyboard mode, move the mouse and use keys 1–7 for the left-hand gestures shown above. Press <strong>P</strong> to enlarge or restore the camera preview. With no camera connection, mouse and keyboard controls activate automatically.</p>
 <p>The robot&#x27;s response to a colour query is Yes or No. Read the serial number and indicator labels with an open palm. Count the visible battery blocks. A vowel means A, E, I, O or U. Wire and button positions in this guide start at 1.</p>
 <h2>Link Recovery</h2>
-<p>Every round includes this robot-specific module. Its HOLD pad is a continuous control: keep the right pointer inside it and show an open left palm for 1.5 seconds of tracked contact. The fist lock does not hold this pad for you. A short tracking flicker pauses charge; a loss lasting about 0.35 seconds resets only the current contact&#x27;s charge. The pointer has a small edge tolerance around the pad. With keyboard controls, keep the mouse on the pad and hold 2. No confirmation gesture is needed here. The pad moves after each completed contact; restore three contacts to disarm the module. An interrupted contact does not cost a life. The agent observes restored and interrupted contacts.</p>
+<p>Every round includes this robot-specific module. Its <strong>HOLD</strong> pad is a continuous control: keep the right pointer on the pad and show an open left palm for 1.5 seconds of tracked contact. <strong>Do not fist-lock the pad</strong>; the pointer must stay on it. A brief tracking flicker pauses progress; a loss lasting about 0.35 seconds resets only the current contact&#x27;s charge. In keyboard mode, keep the mouse on the pad and hold <strong>2</strong>. No Victory confirmation is needed. The pad moves after each completed contact; restore three contacts to disarm the module. An interrupted contact does not cost a life. The narrator reacts to restored and interrupted contacts.</p>
 <p>The start screen offers two or four modules. The two-module demo always has Link Recovery and Wires. The four-module round includes Link Recovery and three randomly selected modules from the four types below.</p>
 <h2>Wires</h2>
 <p>Inspect the wires to determine their colours. Cut one correct wire. Wires run from top to bottom.</p>
-<p>For <strong>three wires</strong>: 1. No red wires: cut wire 2. 2. Last wire yellow: cut wire 3. 3. More than one green wire: cut the last green wire. 4. Otherwise: cut wire 1.</p>
-<p>For <strong>four wires</strong>: 1. Last wire green and no red wires: cut wire 1. 2. No yellow wires: cut wire 1. 3. More than one red wire: cut wire 4. 4. At least one green and at least one blue: cut wire 2. 5. No green wires and the serial contains a vowel: cut wire 3. 6. Otherwise: cut the first yellow wire.</p>
+<p>For <strong>three wires</strong>:</p>
+<ol>
+<li>No red wires: cut wire 2.</li>
+<li>Last wire yellow: cut wire 3.</li>
+<li>More than one green wire: cut the last green wire.</li>
+<li>Otherwise: cut wire 1.</li>
+</ol>
+<p>For <strong>four wires</strong>:</p>
+<ol>
+<li>Last wire green and no red wires: cut wire 1.</li>
+<li>No yellow wires: cut wire 1.</li>
+<li>More than one red wire: cut wire 4.</li>
+<li>At least one green and at least one blue: cut wire 2.</li>
+<li>No green wires and the serial contains a vowel: cut wire 3.</li>
+<li>Otherwise: cut the first yellow wire.</li>
+</ol>
 <h2>The button</h2>
-<p>Inspect its colour and read its word. Count batteries and inspect indicator labels as needed. Queue the following number of presses and confirm once: 1. Blue and labelled Abort: 2. 2. More than one battery and labelled Detonate: 3. 3. Red, exactly three batteries and an FKL indicator: 8. 4. Yellow, more than two batteries and an FRK indicator: 1. 5. Red and exactly one battery: 1. 6. Red: 3. 7. Otherwise: 4.</p>
+<p>Inspect its colour and read its word. Count batteries and inspect indicator labels as needed. Queue the following number of presses and confirm once:</p>
+<ol>
+<li>Blue and labelled Abort: 2.</li>
+<li>More than one battery and labelled Detonate: 3.</li>
+<li>Red, exactly three batteries and an FKL indicator: 8.</li>
+<li>Yellow, more than two batteries and an FRK indicator: 1.</li>
+<li>Red and exactly one battery: 1.</li>
+<li>Red: 3.</li>
+<li>Otherwise: 4.</li>
+</ol>
 <h2>Simon</h2>
 <p>The four positions are red (upper left), yellow (upper right), green (lower left), blue (lower right). The damaged image makes each flash white; use its position to identify the original colour. Wait for the flashing sequence to finish, then enter its mapped colours in order. Each press needs confirmation. Complete five stages, from one flash to five flashes. A mistake generates a new sequence starting at stage one. After five seconds without a press, the sequence replays and your input position resets.</p>
 <table><thead><tr><th>Serial has a vowel; strikes</th><th>Red flash</th><th>Yellow flash</th><th>Green flash</th><th>Blue flash</th></tr></thead><tbody>
@@ -56,6 +82,4 @@ th { background: #d9eaf0; }
 <tr><td>3</td><td>Same label as stage 2</td><td>Same label as stage 1</td><td>Position 3</td><td>Button labelled 4</td></tr>
 <tr><td>4</td><td>Same position as stage 1</td><td>Position 1</td><td>Same position as stage 2</td><td>Same position as stage 2</td></tr>
 <tr><td>5</td><td>Same label as stage 1</td><td>Same label as stage 2</td><td>Same label as stage 4</td><td>Same label as stage 3</td></tr>
-</tbody></table>
-<h2>Inspiration</h2>
-<p>The bomb-module format and Memory puzzle are inspired by Keep Talking and Nobody Explodes. This project&#x27;s contribution is remote gesture control and a live observing narrator. This guide replaces earlier v2/v6 drafts; do not mix editions.</p></body></html>
+</tbody></table></body></html>

@@ -2,7 +2,7 @@
 
 ## Prepare
 
-1. Print `PLAYER_MANUAL_print.html` from a browser at A4 size. This is revision 9. Do not hand out older guides with different controls.
+1. Print `PLAYER_MANUAL_print.html` from a browser at A4 size. This is revision 10. Do not hand out older guides with different controls.
 2. From the repository root run `python3.12 launch.py --check` and `python3.12 tools/check_voice.py`. Ensure Godot, the camera environment, local Qwen inference, and the Liam MP3 check pass.
 3. Run `python3.12 launch.py` and leave that terminal open. Complete the camera rehearsal on the welcome screen: both hands steady, right pointer movement, and the four listed left gestures. Use [the physical acceptance sheet](CAMERA_REHEARSAL.md) with at least two people. Put the printed guide beside the laptop. Record any gesture that fails and fix lighting or camera placement before judging.
 4. Set room lighting so the right index finger and left gestures are visible. Use K to switch to mouse and keys if the venue camera setup fails.
